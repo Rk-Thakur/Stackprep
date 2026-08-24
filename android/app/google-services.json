@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "137630621172",
+    "project_id": "stackprep-e9ddd",
+    "storage_bucket": "stackprep-e9ddd.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:137630621172:android:dd8952da35f535c9d22da1",
+        "android_client_info": {
+          "package_name": "com.example.stackprep"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDnWPKrNmxukweUeEV6SZtFBYJPE6ZXWH4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

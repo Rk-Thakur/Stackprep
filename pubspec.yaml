@@ -1,0 +1,30 @@
+name: stackprep
+description: "A new Flutter project."
+publish_to: "none"
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.0
+
+dependencies:
+  cupertino_icons: ^1.0.8
+  equatable: ^2.1.0
+  firebase_auth: ^6.5.7
+  firebase_core: ^4.13.0
+  flutter:
+    sdk: flutter
+
+  flutter_bloc: ^9.1.1
+  flutter_screenutil: ^5.9.3
+
+  google_fonts: ^6.2.1
+  google_sign_in: ^7.2.0
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
