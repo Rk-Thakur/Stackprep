@@ -15,14 +15,20 @@ class GetPracticeQuestions
   @override
   Future<Either<Failure, List<PracticeQuestion>>> call(
     GetPracticeQuestionsParams params,
-  ) => _repository.getQuestions(topicCode: params.topicCode);
+  ) => _repository.getQuestions(
+    topicCode: params.topicCode,
+    moduleId: params.moduleId,
+  );
 }
 
 class GetPracticeQuestionsParams extends Equatable {
-  const GetPracticeQuestionsParams({required this.topicCode});
+  const GetPracticeQuestionsParams({required this.topicCode, this.moduleId});
 
   final String topicCode;
 
+  /// When set, only that module's questions are loaded (a module quiz).
+  final String? moduleId;
+
   @override
-  List<Object?> get props => [topicCode];
+  List<Object?> get props => [topicCode, moduleId];
 }

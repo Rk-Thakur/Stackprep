@@ -5,7 +5,7 @@ import '../domain/entities/stack_track.dart';
 
 const kStackTracks = <StackTrack>[
   StackTrack(
-    id: 'kotlin',
+    id: 'KOTLIN',
     name: 'Kotlin',
     category: 'ANDROID',
     shape: TrackShapeType.diamond,
@@ -17,21 +17,21 @@ const kStackTracks = <StackTrack>[
     ),
   ),
   StackTrack(
-    id: 'swift',
+    id: 'SWIFT',
     name: 'Swift',
     category: 'IOS',
     shape: TrackShapeType.circle,
     color: Color(0xFFF14C33),
   ),
   StackTrack(
-    id: 'flutter',
+    id: 'FLUTTER',
     name: 'Flutter',
     category: 'CROSS-PLATFORM',
     shape: TrackShapeType.roundedSquare,
     color: Color(0xFF2F6FED),
   ),
   StackTrack(
-    id: 'react_native',
+    id: 'REACT_NATIVE',
     name: 'React Native',
     category: 'CROSS-PLATFORM',
     shape: TrackShapeType.hexagon,

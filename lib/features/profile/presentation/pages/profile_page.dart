@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import '../../../../core/theme/app_colors.dart';
@@ -9,22 +10,33 @@ import '../../../../core/widgets/activity_heatmap.dart';
 import '../../../../core/widgets/app_bottom_nav_bar.dart';
 import '../../../../core/widgets/app_top_bar.dart';
 import '../../../../core/widgets/track_pill.dart';
+import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../../auth/presentation/bloc/auth_event.dart';
+import '../../../auth/presentation/pages/auth_page.dart';
+import '../../../auth/domain/entities/app_user.dart';
+import '../../../onboarding/data/datasources/onboarding_local_data_source.dart';
+import '../../../onboarding/presentation/pages/select_stack_page.dart';
 import '../../../practice/presentation/pages/practice_page.dart';
+import '../../../progress/presentation/cubit/progress_cubit.dart';
+import '../../../progress/presentation/cubit/progress_state.dart';
 import '../../../progress/presentation/pages/progress_page.dart';
+import '../../../../injection_container.dart' show sl;
 import 'account_settings_page.dart';
 import 'security_privacy_page.dart';
 
-class _LinkedTrack {
-  const _LinkedTrack(this.label, this.dotColor);
-
-  final String label;
-  final Color dotColor;
+/// Engineer ladder title derived from the onboarding-selected runtime level.
+String _engineerTitleFor(String levelId) {
+  switch (levelId) {
+    case 'junior':
+      return 'L1_ENGINEER';
+    case 'mid':
+      return 'L2_ENGINEER';
+    case 'senior':
+      return 'L3_ENGINEER';
+    default:
+      return 'L2_ENGINEER';
+  }
 }
-
-const List<_LinkedTrack> _kLinkedTracks = [
-  _LinkedTrack('Kotlin', Color(0xFF8B5CF6)),
-  _LinkedTrack('Swift', Color(0xFFF14C33)),
-];
 
 class _PreferenceItem {
   const _PreferenceItem({required this.icon, required this.title, this.tag});
@@ -41,10 +53,7 @@ const List<_PreferenceItem> _kPreferences = [
     title: 'Subscription',
     tag: 'PRO',
   ),
-  _PreferenceItem(
-    icon: Icons.shield_outlined,
-    title: 'Security & Privacy',
-  ),
+  _PreferenceItem(icon: Icons.shield_outlined, title: 'Security & Privacy'),
 ];
 
 /// Profile tab: identity card, mastery/streak summary, linked tracks, and
@@ -53,9 +62,16 @@ class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
 
   void _comingSoon(BuildContext context, String feature) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('$feature coming soon.')));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('$feature coming soon.')));
+  }
+
+  void _logout(BuildContext context) {
+    context.read<AuthBloc>().add(const AuthSignOutRequested());
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const AuthPage()),
+      (route) => false,
+    );
   }
 
   @override
@@ -67,48 +83,51 @@ class ProfilePage extends StatelessWidget {
           children: [
             AppTopBar(),
             Expanded(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(
-                  AppSpacing.margin,
-                  AppSpacing.md,
-                  AppSpacing.margin,
-                  AppSpacing.xl,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const _ProfileHeaderCard(),
-                    SizedBox(height: AppSpacing.md),
-                    const _MasteryScoreCard(),
-                    SizedBox(height: AppSpacing.md),
-                    const _StreakCard(),
-                    SizedBox(height: AppSpacing.md),
-                    _LinkedTracksCard(
-                      onAddTrack: () => _comingSoon(context, 'Add track'),
-                    ),
-                    SizedBox(height: AppSpacing.md),
-                    _PreferencesCard(
-                      onTapItem: (title) {
-                        if (title == 'Account Settings') {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const AccountSettingsPage(),
-                            ),
-                          );
-                          return;
-                        }
-                        if (title == 'Security & Privacy') {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const SecurityPrivacyPage(),
-                            ),
-                          );
-                          return;
-                        }
-                        _comingSoon(context, title);
-                      },
-                    ),
-                  ],
+              child: BlocProvider(
+                create: (_) => sl<ProgressCubit>()..load(),
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(
+                    AppSpacing.margin,
+                    AppSpacing.md,
+                    AppSpacing.margin,
+                    AppSpacing.xl,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const _ProfileHeaderCard(),
+                      SizedBox(height: AppSpacing.md),
+                      const _MasteryScoreCard(),
+                      SizedBox(height: AppSpacing.md),
+                      const _StreakCard(),
+                      SizedBox(height: AppSpacing.md),
+                      const _LinkedTracksCard(),
+                      SizedBox(height: AppSpacing.md),
+                      _PreferencesCard(
+                        onTapItem: (title) {
+                          if (title == 'Account Settings') {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const AccountSettingsPage(),
+                              ),
+                            );
+                            return;
+                          }
+                          if (title == 'Security & Privacy') {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const SecurityPrivacyPage(),
+                              ),
+                            );
+                            return;
+                          }
+                          _comingSoon(context, title);
+                        },
+                      ),
+                      SizedBox(height: AppSpacing.md),
+                      _LogoutButton(onTap: () => _logout(context)),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -126,9 +145,9 @@ class ProfilePage extends StatelessWidget {
                   );
                   return;
                 }
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const ProgressPage()),
-                );
+                Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const ProgressPage()));
               },
             ),
           ],
@@ -165,6 +184,12 @@ class _ProfileHeaderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final user = context.select<AuthBloc, AppUser?>((bloc) => bloc.state.user);
+    final email = user?.email;
+    final engineerTitle = _engineerTitleFor(
+      sl<OnboardingLocalDataSource>().selectedRuntimeLevel,
+    );
+
     return _ProfileCard(
       child: Column(
         children: [
@@ -186,13 +211,22 @@ class _ProfileHeaderCard extends StatelessWidget {
           ),
           SizedBox(height: AppSpacing.md),
           Text(
-            'L3_ENGINEER',
+            engineerTitle,
             style: AppTypography.headlineMd.copyWith(
               color: AppColors.onSurface,
               fontSize: 22.sp,
               fontWeight: FontWeight.w800,
             ),
           ),
+          if (email != null && email.isNotEmpty) ...[
+            SizedBox(height: AppSpacing.xs),
+            Text(
+              email,
+              style: AppTypography.bodyMd.copyWith(
+                color: AppColors.onSurfaceVariant,
+              ),
+            ),
+          ],
           SizedBox(height: AppSpacing.xs),
           Row(
             mainAxisSize: MainAxisSize.min,
@@ -248,49 +282,59 @@ class _MasteryScoreCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _ProfileCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'MASTERY_SCORE',
-            style: AppTypography.labelMono.copyWith(
-              color: AppColors.onSurfaceVariant,
-            ),
-          ),
-          SizedBox(height: AppSpacing.md),
-          Center(
-            child: SizedBox(
-              width: 140.r,
-              height: 140.r,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  SizedBox(
-                    width: 140.r,
-                    height: 140.r,
-                    child: CircularProgressIndicator(
-                      value: 0.72,
-                      strokeWidth: 9,
-                      backgroundColor: AppColors.surfaceContainerHigh,
-                      valueColor: const AlwaysStoppedAnimation(
-                        AppColors.primary,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    '72%',
-                    style: AppTypography.numeralLg.copyWith(
-                      color: AppColors.onSurface,
-                      fontSize: 32.sp,
-                    ),
-                  ),
-                ],
+    return BlocBuilder<ProgressCubit, ProgressState>(
+      buildWhen: (previous, current) =>
+          previous.summary?.globalReadinessScore !=
+              current.summary?.globalReadinessScore ||
+          previous.status != current.status,
+      builder: (context, state) {
+        final score = state.summary?.globalReadinessScore ?? 0;
+        final displayPercent = (score * 100).clamp(0, 100).round();
+        return _ProfileCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'MASTERY_SCORE',
+                style: AppTypography.labelMono.copyWith(
+                  color: AppColors.onSurfaceVariant,
+                ),
               ),
-            ),
+              SizedBox(height: AppSpacing.md),
+              Center(
+                child: SizedBox(
+                  width: 140.r,
+                  height: 140.r,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      SizedBox(
+                        width: 140.r,
+                        height: 140.r,
+                        child: CircularProgressIndicator(
+                          value: score.clamp(0.0, 1.0),
+                          strokeWidth: 9,
+                          backgroundColor: AppColors.surfaceContainerHigh,
+                          valueColor: const AlwaysStoppedAnimation(
+                            AppColors.primary,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '$displayPercent%',
+                        style: AppTypography.numeralLg.copyWith(
+                          color: AppColors.onSurface,
+                          fontSize: 32.sp,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -300,80 +344,107 @@ class _StreakCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _ProfileCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'CURRENT_STREAK',
-            style: AppTypography.labelMono.copyWith(
-              color: AppColors.onSurfaceVariant,
-            ),
-          ),
-          SizedBox(height: AppSpacing.sm),
-          Center(
-            child: RichText(
-              text: TextSpan(
-                children: [
-                  TextSpan(
-                    text: '47',
-                    style: AppTypography.numeralLg.copyWith(
-                      color: AppColors.primary,
-                      fontSize: 34.sp,
-                    ),
+    return BlocBuilder<ProgressCubit, ProgressState>(
+      buildWhen: (previous, current) =>
+          previous.summary?.currentStreakDays !=
+              current.summary?.currentStreakDays ||
+          previous.status != current.status,
+      builder: (context, state) {
+        final streak = state.summary?.currentStreakDays ?? 0;
+        return _ProfileCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'CURRENT_STREAK',
+                  style: AppTypography.labelMono.copyWith(
+                    color: AppColors.onSurfaceVariant,
                   ),
-                  TextSpan(
-                    text: ' days',
-                    style: AppTypography.bodyLg.copyWith(
-                      color: AppColors.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              for (var i = 0; i < 4; i++)
-                Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.only(right: i == 3 ? 0 : 4.r),
-                    child: Container(
-                      height: 8.r,
-                      decoration: BoxDecoration(
-                        color: kReadinessScale[i + 1],
-                        borderRadius: AppRadius.radiusSm,
-                      ),
+                ),
+                SizedBox(height: AppSpacing.sm),
+                Center(
+                  child: RichText(
+                    text: TextSpan(
+                      children: [
+                        TextSpan(
+                          text: '$streak',
+                          style: AppTypography.numeralLg.copyWith(
+                            color: AppColors.primary,
+                            fontSize: 34.sp,
+                          ),
+                        ),
+                        TextSpan(
+                          text: ' days',
+                          style: AppTypography.bodyLg.copyWith(
+                            color: AppColors.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-            ],
-          ),
-          SizedBox(height: AppSpacing.xs),
-          Align(
-            alignment: Alignment.centerRight,
-            child: Text(
-              'Optimal Readiness',
-              style: AppTypography.bodyMd.copyWith(
-                color: AppColors.onSurfaceVariant,
-                fontSize: 12.sp,
-              ),
+                SizedBox(height: AppSpacing.md),
+                Row(
+                  children: [
+                    for (var i = 0; i < 4; i++)
+                      Expanded(
+                        child: Padding(
+                          padding: EdgeInsets.only(right: i == 3 ? 0 : 4.r),
+                          child: Container(
+                            height: 8.r,
+                            decoration: BoxDecoration(
+                              color: kReadinessScale[i + 1],
+                              borderRadius: AppRadius.radiusSm,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                SizedBox(height: AppSpacing.xs),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    'Optimal Readiness',
+                    style: AppTypography.bodyMd.copyWith(
+                      color: AppColors.onSurfaceVariant,
+                      fontSize: 12.sp,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
-    );
+          );
+        },
+      );
   }
 }
 
-class _LinkedTracksCard extends StatelessWidget {
-  const _LinkedTracksCard({required this.onAddTrack});
+class _LinkedTracksCard extends StatefulWidget {
+  const _LinkedTracksCard();
 
-  final VoidCallback onAddTrack;
+  @override
+  State<_LinkedTracksCard> createState() => _LinkedTracksCardState();
+}
+
+class _LinkedTracksCardState extends State<_LinkedTracksCard> {
+  Future<void> _addTrack() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const SelectStackPage(manageTracks: true),
+      ),
+    );
+    if (!mounted) return;
+    setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
+    final selectedIds = sl<OnboardingLocalDataSource>().selectedTrackIds;
+    final tracks = sl<OnboardingLocalDataSource>().stackTracks
+        .where((t) => selectedIds.contains(t.id))
+        .toList();
+
     return _ProfileCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -395,25 +466,27 @@ class _LinkedTracksCard extends StatelessWidget {
             ],
           ),
           SizedBox(height: AppSpacing.sm),
-          Row(
-            children: [
-              for (final track in _kLinkedTracks)
-                Padding(
-                  padding: EdgeInsets.only(
-                    right: track == _kLinkedTracks.last ? 0 : AppSpacing.xs,
-                  ),
-                  child: TrackPill(
-                    label: track.label,
-                    dotColor: track.dotColor,
-                  ),
-                ),
-            ],
-          ),
+          if (tracks.isEmpty)
+            Text(
+              'No tracks linked yet.',
+              style: AppTypography.bodyMd.copyWith(
+                color: AppColors.onSurfaceVariant,
+              ),
+            )
+          else
+            Wrap(
+              spacing: AppSpacing.xs,
+              runSpacing: AppSpacing.xs,
+              children: [
+                for (final track in tracks)
+                  TrackPill(label: track.name, dotColor: track.color),
+              ],
+            ),
           SizedBox(height: AppSpacing.md),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
-              onPressed: onAddTrack,
+              onPressed: _addTrack,
               icon: Icon(Icons.add_rounded, size: 16.r),
               label: const Text('ADD_TRACK'),
               style: OutlinedButton.styleFrom(
@@ -421,9 +494,7 @@ class _LinkedTracksCard extends StatelessWidget {
                 side: const BorderSide(color: AppColors.outlineVariant),
                 padding: EdgeInsets.symmetric(vertical: 12.r),
                 textStyle: AppTypography.labelMono,
-                shape: RoundedRectangleBorder(
-                  borderRadius: AppRadius.radiusMd,
-                ),
+                shape: RoundedRectangleBorder(borderRadius: AppRadius.radiusMd),
               ),
             ),
           ),
@@ -517,6 +588,35 @@ class _PreferencesCard extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _LogoutButton extends StatelessWidget {
+  const _LogoutButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: onTap,
+        icon: Icon(Icons.logout_rounded, size: 18.r, color: AppColors.error),
+        label: Text(
+          'Log Out',
+          style: AppTypography.bodyLg.copyWith(
+            color: AppColors.error,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        style: OutlinedButton.styleFrom(
+          side: BorderSide(color: AppColors.error.withValues(alpha: 0.5)),
+          padding: EdgeInsets.symmetric(vertical: 14.r),
+          shape: RoundedRectangleBorder(borderRadius: AppRadius.radiusMd),
+        ),
       ),
     );
   }

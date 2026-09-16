@@ -21,4 +21,14 @@ class TopicRepositoryImpl implements TopicRepository {
       return Left(CacheFailure(exception.message));
     }
   }
+
+  @override
+  Future<Either<Failure, List<Topic>>> getTopics() async {
+    try {
+      final topics = await _remoteDataSource.getTopics();
+      return Right(topics);
+    } on AppException catch (exception) {
+      return Left(CacheFailure(exception.message));
+    }
+  }
 }

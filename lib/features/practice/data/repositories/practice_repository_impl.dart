@@ -15,10 +15,12 @@ class PracticeRepositoryImpl implements PracticeRepository {
   @override
   Future<Either<Failure, List<PracticeQuestion>>> getQuestions({
     required String topicCode,
+    String? moduleId,
   }) async {
     try {
       final models = await _remoteDataSource.getQuestions(
         topicCode: topicCode,
+        moduleId: moduleId,
       );
       return Right(models.map((model) => model.toEntity()).toList());
     } on CacheException catch (e) {

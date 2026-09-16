@@ -2,19 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import '../theme/app_colors.dart';
+import '../theme/app_radius.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 
-/// The app's shared top bar with the "StackPrep" title.
+/// The app's shared top bar with the StackPrep terminal icon and title.
 /// Used across the main tab screens.
 class AppTopBar extends StatelessWidget {
   const AppTopBar({
     super.key,
-    this.onMenuTap,
+    this.trailing,
     this.showBottomDivider = false,
   });
 
-  final VoidCallback? onMenuTap;
+  final Widget? trailing;
   final bool showBottomDivider;
 
   @override
@@ -34,24 +35,29 @@ class AppTopBar extends StatelessWidget {
         ),
         child: Row(
           children: [
+            Container(
+              padding: EdgeInsets.all(6.r),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.15),
+                borderRadius: AppRadius.radiusSm,
+              ),
+              child: Icon(
+                Icons.terminal_rounded,
+                size: 18.r,
+                color: AppColors.primary,
+              ),
+            ),
+            SizedBox(width: AppSpacing.sm),
             Expanded(
               child: Text(
                 'StackPrep',
-                style: AppTypography.headlineMd.copyWith(
+                style: AppTypography.labelMono.copyWith(
                   color: AppColors.primary,
-                  fontSize: 20.sp,
+                  fontSize: 13.sp,
                 ),
               ),
             ),
-            if (onMenuTap != null)
-              IconButton(
-                onPressed: onMenuTap,
-                icon: Icon(
-                  Icons.menu_rounded,
-                  size: 22.r,
-                  color: AppColors.onSurface,
-                ),
-              ),
+            if (trailing != null) trailing!,
           ],
         ),
       ),

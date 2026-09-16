@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:skeletonizer/skeletonizer.dart';
 
 import '../../../../injection_container.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/widgets/app_top_bar.dart';
 import '../../../../core/widgets/code_block.dart';
 import '../bloc/practice_session_bloc.dart';
 import '../bloc/practice_session_event.dart';
@@ -16,17 +18,35 @@ import '../widgets/inline_code.dart';
 import 'session_summary_page.dart';
 
 /// A single practice question flow, reached via "Start Practice" from a
-/// topic detail page.
+/// topic detail page, a module's "Take Quiz", or the daily challenge.
 class PracticeSessionPage extends StatelessWidget {
-  const PracticeSessionPage({super.key, this.topicCode = 'KTN_COROUTINES'});
+  const PracticeSessionPage({
+    super.key,
+    this.topicCode = '',
+    this.moduleId,
+    this.challenge = false,
+  });
 
   final String topicCode;
+
+  /// When set, the session uses only that module's questions (module quiz).
+  final String? moduleId;
+
+  /// When true, the session is the daily challenge and rolls into the
+  /// 'challenge' activity channel once completed.
+  final bool challenge;
 
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (_) => sl<PracticeSessionBloc>()
-        ..add(PracticeSessionStarted(topicCode: topicCode)),
+        ..add(
+          PracticeSessionStarted(
+            topicCode: topicCode,
+            moduleId: moduleId,
+            challenge: challenge,
+          ),
+        ),
       child: const _PracticeSessionView(),
     );
   }
@@ -72,6 +92,9 @@ class _PracticeSessionViewState extends State<_PracticeSessionView> {
               builder: (_) => SessionSummaryPage(
                 correctCount: state.correctCount,
                 totalQuestions: state.totalQuestions,
+                results: state.results,
+                topicCode: state.topicCode,
+                moduleId: state.moduleId,
               ),
             ),
           );
@@ -96,64 +119,45 @@ class _PracticeSessionViewState extends State<_PracticeSessionView> {
                   backgroundColor: AppColors.surfaceContainerHigh,
                   valueColor: const AlwaysStoppedAnimation(AppColors.primary),
                 ),
-                Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: AppSpacing.margin,
-                    vertical: AppSpacing.sm,
-                  ),
-                  child: Row(
+                AppTopBar(
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      InkWell(
-                        onTap: () => Navigator.of(context).maybePop(),
-                        borderRadius: AppRadius.radiusFull,
-                        child: Padding(
-                          padding: EdgeInsets.all(4.r),
-                          child: Icon(
-                            Icons.close_rounded,
-                            size: 22.r,
-                            color: AppColors.onSurfaceVariant,
+                      Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: AppSpacing.sm,
+                          vertical: 6.r,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceContainer,
+                          borderRadius: AppRadius.radiusFull,
+                          border: Border.all(
+                            color: AppColors.outlineVariant,
                           ),
                         ),
-                      ),
-                      Expanded(
-                        child: Center(
-                          child: Container(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: AppSpacing.sm,
-                              vertical: 6.r,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.surfaceContainer,
-                              borderRadius: AppRadius.radiusFull,
-                              border: Border.all(
-                                color: AppColors.outlineVariant,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '[SYSTEM_STATUS: '
+                                '${(state.progress * 100).round()}%]',
+                                style: AppTypography.labelMono.copyWith(
+                                  color: AppColors.onSurfaceVariant,
+                                  fontSize: 10.sp,
+                                ),
                               ),
-                            ),
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    '[SYSTEM_STATUS: '
-                                    '${(state.progress * 100).round()}%]',
-                                    style: AppTypography.labelMono.copyWith(
-                                      color: AppColors.onSurfaceVariant,
-                                      fontSize: 10.sp,
-                                    ),
-                                  ),
-                                  SizedBox(width: AppSpacing.xs),
-                                  Text(
-                                    state.topicCode,
-                                    style: AppTypography.labelMono.copyWith(
-                                      color: AppColors.onSurface,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 10.sp,
-                                    ),
-                                  ),
-                                ],
+                              SizedBox(width: AppSpacing.xs),
+                              Text(
+                                state.topicCode,
+                                style: AppTypography.labelMono.copyWith(
+                                  color: AppColors.onSurface,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 10.sp,
+                                ),
                               ),
-                            ),
+                            ],
                           ),
                         ),
                       ),
@@ -174,9 +178,8 @@ class _PracticeSessionViewState extends State<_PracticeSessionView> {
                 ),
                 Expanded(
                   child: switch (state.status) {
-                    PracticeSessionStatus.loading => const Center(
-                      child: CircularProgressIndicator(),
-                    ),
+                    PracticeSessionStatus.loading =>
+                      const _PracticeQuestionSkeleton(),
                     PracticeSessionStatus.failure => Center(
                       child: Text(
                         state.errorMessage ?? 'Something went wrong.',
@@ -316,6 +319,62 @@ class _PracticeSessionViewState extends State<_PracticeSessionView> {
           ),
         );
       },
+    );
+  }
+}
+
+/// Shimmering placeholder matching the question view's layout while
+/// questions are still loading.
+class _PracticeQuestionSkeleton extends StatelessWidget {
+  const _PracticeQuestionSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Skeletonizer(
+      enabled: true,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.margin,
+          AppSpacing.sm,
+          AppSpacing.margin,
+          AppSpacing.lg,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '[LOG_ID: PLACEHOLDER]',
+              style: AppTypography.labelMono.copyWith(
+                color: AppColors.outline,
+                fontSize: 11.sp,
+              ),
+            ),
+            SizedBox(height: AppSpacing.sm),
+            Text(
+              'A placeholder question spanning a couple of lines while '
+              'real content loads.',
+              style: AppTypography.headlineMd.copyWith(
+                color: AppColors.onSurface,
+                fontSize: 22.sp,
+                height: 1.3,
+              ),
+            ),
+            SizedBox(height: AppSpacing.md),
+            for (var i = 0; i < 4; i++)
+              Padding(
+                padding: EdgeInsets.only(bottom: AppSpacing.sm),
+                child: Container(
+                  height: 56.r,
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceContainer,
+                    borderRadius: AppRadius.radiusMd,
+                    border: Border.all(color: AppColors.outlineVariant),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

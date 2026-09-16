@@ -9,12 +9,23 @@ sealed class PracticeSessionEvent extends Equatable {
 
 /// Kicks off a session: loads the question set for [topicCode].
 class PracticeSessionStarted extends PracticeSessionEvent {
-  const PracticeSessionStarted({required this.topicCode});
+  const PracticeSessionStarted({
+    required this.topicCode,
+    this.moduleId,
+    this.challenge = false,
+  });
 
   final String topicCode;
 
+  /// When set, only that module's questions are loaded (a module quiz).
+  final String? moduleId;
+
+  /// When true, the session is a daily challenge and is recorded under the
+  /// 'challenge' activity channel.
+  final bool challenge;
+
   @override
-  List<Object?> get props => [topicCode];
+  List<Object?> get props => [topicCode, moduleId, challenge];
 }
 
 class PracticeAnswerSelected extends PracticeSessionEvent {

@@ -74,4 +74,10 @@ abstract final class AppColors {
 
   static const codeBlockBackground = Color(0xFF1A1A1A);
   static const codeLineNumber = Color(0xFF4A4A4A);
+
+  // Semantic snackbar signal colors ("Obsidian Terminal" component spec).
+  // Success reuses primaryFixedDim; these three are net-new.
+  static const errorRed = Color(0xFFF44336);
+  static const warningOrange = Color(0xFFFF9800);
+  static const infoBlue = Color(0xFF2196F3);
 }

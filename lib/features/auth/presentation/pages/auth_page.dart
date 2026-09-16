@@ -8,8 +8,13 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/widgets/terminal_snackbar.dart';
 import '../../../../core/widgets/terminal_text_field.dart';
+import '../../../../injection_container.dart';
+import '../../../home/presentation/pages/home_page.dart';
+import '../../../onboarding/data/datasources/onboarding_local_data_source.dart';
 import '../../../onboarding/presentation/pages/select_stack_page.dart';
+import '../../../splash/presentation/widgets/hero_mark.dart';
 import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
@@ -23,13 +28,20 @@ class AuthPage extends StatefulWidget {
   State<AuthPage> createState() => _AuthPageState();
 }
 
-class _AuthPageState extends State<AuthPage> {
+class _AuthPageState extends State<AuthPage>
+    with TickerProviderStateMixin {
   int _tabIndex = 0;
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
+  late final AnimationController _logoController = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 12),
+  )..repeat();
+
   @override
   void dispose() {
+    _logoController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -39,8 +51,10 @@ class _AuthPageState extends State<AuthPage> {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
     if (email.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter both an email and password.')),
+      TerminalSnackbar.show(
+        context,
+        level: SnackLevel.warning,
+        message: 'EMAIL_AND_PASSWORD_REQUIRED',
       );
       return;
     }
@@ -59,9 +73,11 @@ class _AuthPageState extends State<AuthPage> {
   }
 
   void _comingSoon(String provider) {
-    ScaffoldMessenger.of(
+    TerminalSnackbar.show(
       context,
-    ).showSnackBar(SnackBar(content: Text('$provider auth coming soon.')));
+      level: SnackLevel.info,
+      message: '${provider.toUpperCase()}_AUTH_NOT_AVAILABLE',
+    );
   }
 
   @override
@@ -70,19 +86,52 @@ class _AuthPageState extends State<AuthPage> {
       listenWhen: (previous, current) =>
           (previous.status != AuthStatus.authenticated &&
               current.status == AuthStatus.authenticated) ||
+          (current.justSignedUp != previous.justSignedUp) ||
           (current.formStatus == AuthFormStatus.failure &&
               current.errorMessage != previous.errorMessage),
       listener: (context, state) {
-        if (state.status == AuthStatus.authenticated) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const SelectStackPage()),
+        if (state.status == AuthStatus.authenticated && !state.justSignedUp) {
+          final onboardingCompleted =
+              sl<OnboardingLocalDataSource>().isOnboardingCompleted();
+          TerminalSnackbar.show(
+            context,
+            level: SnackLevel.success,
+            message: 'SECURE_CONNECTION_STABLE',
+            duration: const Duration(seconds: 2),
           );
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (!context.mounted) return;
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (_) => onboardingCompleted
+                    ? const HomePage()
+                    : const SelectStackPage(),
+              ),
+            );
+          });
           return;
         }
         if (state.formStatus == AuthFormStatus.failure &&
             state.errorMessage != null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(state.errorMessage!)),
+          TerminalSnackbar.show(
+            context,
+            level: SnackLevel.error,
+            message: state.errorMessage!,
+            actionLabel: 'RETRY',
+            onAction: _submit,
+          );
+          return;
+        }
+        if (state.justSignedUp) {
+          setState(() {
+            _tabIndex = 0;
+            _emailController.clear();
+            _passwordController.clear();
+          });
+          TerminalSnackbar.show(
+            context,
+            level: SnackLevel.success,
+            message: 'ACCOUNT_CREATED — sign in to continue',
           );
         }
       },
@@ -110,23 +159,56 @@ class _AuthPageState extends State<AuthPage> {
               ),
             ),
             SafeArea(
-              child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.margin,
-                  vertical: AppSpacing.sm,
-                ),
-                child: Column(
-                  children: [
-                    const Spacer(flex: 2),
+              child: LayoutBuilder(
+                builder: (context, constraints) => SingleChildScrollView(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: AppSpacing.margin,
+                    vertical: AppSpacing.sm,
+                  ),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight -
+                          (AppSpacing.sm * 2),
+                    ),
+                    child: IntrinsicHeight(
+                      child: Column(
+                        children: [
+                          const Spacer(flex: 2),
+                    Container(
+                      width: 108.r,
+                      height: 108.r,
+                      clipBehavior: Clip.antiAlias,
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceContainer,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.outlineVariant),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primaryContainer.withValues(
+                              alpha: 0.15,
+                            ),
+                            blurRadius: 30,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: AnimatedBuilder(
+                        animation: _logoController,
+                        builder: (context, _) => HeroMark(
+                          progress: _logoController.value,
+                          size: 108,
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: AppSpacing.md),
                     FittedBox(
                       fit: BoxFit.scaleDown,
                       child: Text(
-                        'ENGINEER_NOTEBOOK_INIT',
+                        'STACKPREP',
                         maxLines: 1,
-                        style: AppTypography.numeralLg.copyWith(
-                          fontSize: 26.sp,
+                        style: AppTypography.headlineLg.copyWith(
                           fontWeight: FontWeight.w800,
-                          letterSpacing: 1,
+                          letterSpacing: 2,
                           color: AppColors.primaryContainer,
                         ),
                       ),
@@ -321,36 +403,14 @@ class _AuthPageState extends State<AuthPage> {
                         },
                       ),
                     ),
-                    const Spacer(),
-                    // FittedBox keeps the footer from clipping if the
-                    // mono font renders wider than the design frame
-                    // (smaller devices, larger accessibility text).
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            'PRIVACY_POLICY',
-                            style: AppTypography.labelMono.copyWith(
-                              color: AppColors.outline,
-                            ),
-                          ),
-                          SizedBox(width: AppSpacing.lg),
-                          Text(
-                            'TERMS_OF_SERVICE',
-                            style: AppTypography.labelMono.copyWith(
-                              color: AppColors.outline,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                   ],
                 ),
               ),
             ),
-          ],
+          ),
+        ),
+      ),
+        ],
         ),
       ),
     );

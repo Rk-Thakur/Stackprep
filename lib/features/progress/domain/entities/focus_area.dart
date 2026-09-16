@@ -12,6 +12,8 @@ class FocusArea extends Equatable {
     required this.trend,
     required this.trendLabel,
     this.critical = false,
+    this.trackId,
+    this.moduleId,
   });
 
   final String title;
@@ -22,6 +24,11 @@ class FocusArea extends Equatable {
   final TrendDirection trend;
   final String trendLabel;
 
+  /// Present for auto-computed focus areas (the weakest module in a track),
+  /// so tapping the card can navigate straight to that module.
+  final String? trackId;
+  final String? moduleId;
+
   @override
   List<Object?> get props => [
     title,
@@ -29,5 +36,7 @@ class FocusArea extends Equatable {
     critical,
     trend,
     trendLabel,
+    trackId,
+    moduleId,
   ];
 }

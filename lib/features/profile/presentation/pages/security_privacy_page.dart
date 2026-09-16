@@ -6,6 +6,7 @@ import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/app_bottom_nav_bar.dart';
+import '../../../../core/widgets/app_top_bar.dart';
 import '../../../practice/presentation/pages/practice_page.dart';
 import '../../../progress/presentation/pages/progress_page.dart';
 
@@ -26,7 +27,20 @@ class SecurityPrivacyPage extends StatelessWidget {
         bottom: false,
         child: Column(
           children: [
-            const _TopBar(),
+            AppTopBar(
+              trailing: InkWell(
+                onTap: () => Navigator.of(context).maybePop(),
+                borderRadius: AppRadius.radiusSm,
+                child: Padding(
+                  padding: EdgeInsets.all(4.r),
+                  child: Icon(
+                    Icons.arrow_back_rounded,
+                    size: 22.r,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+            ),
             Expanded(
               child: SingleChildScrollView(
                 padding: EdgeInsets.fromLTRB(
@@ -248,48 +262,6 @@ class SecurityPrivacyPage extends StatelessWidget {
                   MaterialPageRoute(builder: (_) => const ProgressPage()),
                 );
               },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TopBar extends StatelessWidget {
-  const _TopBar();
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.outlineVariant)),
-      ),
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.margin,
-          vertical: AppSpacing.md,
-        ),
-        child: Row(
-          children: [
-            InkWell(
-              onTap: () => Navigator.of(context).maybePop(),
-              borderRadius: AppRadius.radiusSm,
-              child: Padding(
-                padding: EdgeInsets.all(4.r),
-                child: Icon(
-                  Icons.arrow_back_rounded,
-                  size: 22.r,
-                  color: AppColors.primary,
-                ),
-              ),
-            ),
-            SizedBox(width: AppSpacing.sm),
-            Text(
-              'ACCOUNT_SECURITY',
-              style: AppTypography.labelMono.copyWith(
-                color: AppColors.primary,
-              ),
             ),
           ],
         ),

@@ -30,8 +30,13 @@ import 'features/progress/data/datasources/progress_local_data_source.dart';
 import 'features/progress/data/repositories/progress_repository_impl.dart';
 import 'features/progress/domain/repositories/progress_repository.dart';
 import 'features/progress/domain/usecases/get_progress_overview.dart';
+import 'features/progress/domain/usecases/mark_module_viewed.dart';
+import 'features/progress/domain/usecases/record_attempt.dart';
 import 'features/progress/presentation/cubit/progress_cubit.dart';
-import 'features/search/presentation/cubit/search_cubit.dart';
+import 'features/topics/data/datasources/topic_remote_data_source.dart';
+import 'features/topics/data/repositories/topic_repository_impl.dart';
+import 'features/topics/domain/repositories/topic_repository.dart';
+import 'features/topics/presentation/cubit/topic_cubit.dart';
 
 final sl = GetIt.instance;
 
@@ -44,7 +49,7 @@ Future<void> configureDependencies() async {
 
   // Data sources
   sl.registerLazySingleton<AuthRemoteDataSource>(
-    () => AuthRemoteDataSourceImpl(firebaseAuth: sl()),
+    () => AuthRemoteDataSourceImpl(firebaseAuth: sl(), firestore: sl()),
   );
   sl.registerLazySingleton<OnboardingLocalDataSource>(
     () => OnboardingLocalDataSourceImpl(prefs: sl()),
@@ -55,6 +60,7 @@ Future<void> configureDependencies() async {
   sl.registerLazySingleton<PracticeRemoteDataSource>(
     () => PracticeFirestoreDataSourceImpl(firestore: sl()),
   );
+  sl.registerLazySingleton(() => TopicRemoteDataSource(firestore: sl()));
   sl.registerLazySingleton(
     () => ProgressFirestoreDataSource(firestore: sl(), firebaseAuth: sl()),
   );
@@ -64,13 +70,14 @@ Future<void> configureDependencies() async {
     () => AuthRepositoryImpl(remoteDataSource: sl()),
   );
   sl.registerLazySingleton<OnboardingRepository>(
-    () => OnboardingRepositoryImpl(
-      localDataSource: sl(),
-      remoteDataSource: sl(),
-    ),
+    () =>
+        OnboardingRepositoryImpl(localDataSource: sl(), remoteDataSource: sl()),
   );
   sl.registerLazySingleton<PracticeRepository>(
     () => PracticeRepositoryImpl(remoteDataSource: sl()),
+  );
+  sl.registerLazySingleton<TopicRepository>(
+    () => TopicRepositoryImpl(remoteDataSource: sl()),
   );
   sl.registerLazySingleton<ProgressRepository>(
     () => ProgressRepositoryImpl(remoteDataSource: sl()),
@@ -91,9 +98,9 @@ Future<void> configureDependencies() async {
 
   // Use cases — practice / progress
   sl.registerLazySingleton(() => GetPracticeQuestions(sl()));
-  sl.registerLazySingleton(
-    () => GetProgressOverview(repository: sl()),
-  );
+  sl.registerLazySingleton(() => GetProgressOverview(repository: sl()));
+  sl.registerLazySingleton(() => RecordAttempt(repository: sl()));
+  sl.registerLazySingleton(() => MarkModuleViewed(repository: sl()));
 
   // Blocs & cubits
   sl.registerFactory(
@@ -114,14 +121,18 @@ Future<void> configureDependencies() async {
       localDataSource: sl(),
     ),
   );
+  sl.registerFactory(() => TopicCubit(repository: sl()));
   sl.registerFactory(
     () => ProgressCubit(
       getProgressOverview: sl(),
+      repository: sl(),
       getStackTracks: sl(),
     ),
   );
   sl.registerFactory(
-    () => PracticeSessionBloc(getPracticeQuestions: sl()),
+    () => PracticeSessionBloc(
+      getPracticeQuestions: sl(),
+      recordAttempt: sl(),
+    ),
   );
-  sl.registerFactory(() => SearchCubit());
 }

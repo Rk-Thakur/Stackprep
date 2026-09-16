@@ -1,18 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/router/route_observer.dart';
 import '../../../../core/widgets/activity_heatmap.dart';
 import '../../../../core/widgets/app_bottom_nav_bar.dart';
 import '../../../../core/widgets/app_top_bar.dart';
 import '../../../../core/widgets/track_pill.dart';
 import '../../../onboarding/data/datasources/onboarding_local_data_source.dart';
 import '../../../practice/presentation/pages/practice_page.dart';
+import '../../../practice/presentation/pages/practice_session_page.dart';
 import '../../../profile/presentation/pages/profile_page.dart';
+import '../../../progress/presentation/cubit/progress_cubit.dart';
+import '../../../progress/presentation/cubit/progress_state.dart';
+import '../../../progress/domain/entities/focus_area.dart';
 import '../../../progress/presentation/pages/progress_page.dart';
+import '../../../topics/presentation/pages/module_detail_page.dart';
 import '../../../topics/presentation/pages/topic_detail_page.dart';
 import '../../../../injection_container.dart' show sl;
 
@@ -40,111 +47,239 @@ class HomePage extends StatelessWidget {
     return _kLevelDisplayNames[levelId] ?? 'Dev';
   }
 
-  void _comingSoon(BuildContext context, String feature) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('$feature coming soon.')));
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            AppTopBar(),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(
-                  AppSpacing.margin,
-                  AppSpacing.md,
-                  AppSpacing.margin,
-                  AppSpacing.xl,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '$_greeting, $_levelLabel Dev.',
-                      style: AppTypography.headlineLgResponsive(
-                        context,
-                      ).copyWith(color: AppColors.onSurface),
+    return BlocProvider(
+      create: (_) => sl<ProgressCubit>()..load(),
+      child: _HomeLifecycle(
+        child: Builder(builder: (context) => _buildHome(context)),
+      ),
+    );
+  }
+
+  Widget _buildHome(BuildContext context) {
+    return BlocListener<ProgressCubit, ProgressState>(
+      listenWhen: (previous, current) =>
+          previous.status != ProgressStatus.failure &&
+          current.status == ProgressStatus.failure,
+      listener: (context, state) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              state.errorMessage ?? 'Failed to load. No internet connection?',
+            ),
+          ),
+        );
+      },
+      child: Scaffold(
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              AppTopBar(),
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: () => context.read<ProgressCubit>().load(),
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: EdgeInsets.fromLTRB(
+                      AppSpacing.margin,
+                      AppSpacing.md,
+                      AppSpacing.margin,
+                      AppSpacing.xl,
                     ),
-                    SizedBox(height: AppSpacing.sm),
-                    Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(
-                          Icons.local_fire_department_rounded,
-                          size: 20.r,
-                          color: AppColors.primary,
-                        ),
-                        SizedBox(width: AppSpacing.xs),
                         Text(
-                          'Your streak: ',
-                          style: AppTypography.bodyLg.copyWith(
-                            color: AppColors.onSurfaceVariant,
-                          ),
+                          '$_greeting, $_levelLabel Dev.',
+                          style: AppTypography.headlineLgResponsive(context)
+                              .copyWith(color: AppColors.onSurface),
                         ),
-                        Text(
-                          '12',
-                          style: AppTypography.numeralLg.copyWith(
-                            color: AppColors.primary,
-                          ),
+                        SizedBox(height: AppSpacing.sm),
+                        BlocBuilder<ProgressCubit, ProgressState>(
+                          buildWhen: (previous, current) =>
+                              previous.summary?.currentStreakDays !=
+                                  current.summary?.currentStreakDays ||
+                              previous.status != current.status,
+                          builder: (context, state) {
+                            final streak =
+                                state.summary?.currentStreakDays ?? 0;
+                            return Row(
+                              children: [
+                                Icon(
+                                  Icons.local_fire_department_rounded,
+                                  size: 20.r,
+                                  color: AppColors.primary,
+                                ),
+                                SizedBox(width: AppSpacing.xs),
+                                Text(
+                                  'Your streak: ',
+                                  style: AppTypography.bodyLg.copyWith(
+                                    color: AppColors.onSurfaceVariant,
+                                  ),
+                                ),
+                                Text(
+                                  '$streak',
+                                  style: AppTypography.numeralLg.copyWith(
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                                SizedBox(width: AppSpacing.xs),
+                                Text(
+                                  'days',
+                                  style: AppTypography.bodyLg.copyWith(
+                                    color: AppColors.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
                         ),
-                        SizedBox(width: AppSpacing.xs),
-                        Text(
-                          'days',
-                          style: AppTypography.bodyLg.copyWith(
-                            color: AppColors.onSurfaceVariant,
-                          ),
+                        SizedBox(height: AppSpacing.lg),
+                        const _ActivityCard(),
+                        SizedBox(height: AppSpacing.md),
+                        BlocBuilder<ProgressCubit, ProgressState>(
+                          buildWhen: (previous, current) =>
+                              previous.tracks != current.tracks,
+                          builder: (context, state) {
+                            final tracks = state.tracks;
+                            if (tracks.isEmpty) {
+                              return const SizedBox.shrink();
+                            }
+                            final track = tracks.first;
+                            final trackName = track.name;
+                            final trackId = track.id;
+                            return _DailyChallengeCard(
+                              trackName: trackName,
+                              trackId: trackId,
+                              onStart: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => PracticeSessionPage(
+                                    topicCode: trackId,
+                                    challenge: true,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        SizedBox(height: AppSpacing.md),
+                        BlocBuilder<ProgressCubit, ProgressState>(
+                          buildWhen: (previous, current) =>
+                              previous.summary?.globalReadinessScore !=
+                                  current.summary?.globalReadinessScore ||
+                              previous.focusAreas != current.focusAreas ||
+                              previous.tracks != current.tracks,
+                          builder: (context, state) {
+                            final summary = state.summary;
+                            final focus = state.focusAreas.isNotEmpty
+                                ? state.focusAreas.first
+                                : null;
+                            final hasTracks = state.tracks.isNotEmpty;
+                            final trackId =
+                                focus?.trackId ??
+                                (hasTracks ? state.tracks.first.id : null);
+                            final hasProgress =
+                                (summary?.globalReadinessScore ?? 0) > 0;
+                            return _ContinueCard(
+                              masteryScore: summary?.globalReadinessScore ?? 0,
+                              title: hasProgress
+                                  ? (focus?.title ?? 'Core Competencies')
+                                  : 'Get Started',
+                              subtitle: hasProgress
+                                  ? (focus != null
+                                        ? 'Ready for review'
+                                        : 'Pick a course to continue')
+                                  : 'Complete a course to see your mastery',
+                              onResume: () {
+                                if (trackId == null) return;
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        TopicDetailPage(trackId: trackId),
+                                  ),
+                                );
+                              },
+                              buttonLabel: hasProgress
+                                  ? 'Resume Course'
+                                  : 'Explore Courses',
+                            );
+                          },
+                        ),
+                        SizedBox(height: AppSpacing.md),
+                        BlocBuilder<ProgressCubit, ProgressState>(
+                          buildWhen: (previous, current) =>
+                              previous.focusAreas != current.focusAreas,
+                          builder: (context, state) =>
+                              _WeakTopicsCard(focusAreas: state.focusAreas),
                         ),
                       ],
                     ),
-                    SizedBox(height: AppSpacing.lg),
-                    const _ActivityCard(),
-                    SizedBox(height: AppSpacing.md),
-                    _DailyChallengeCard(
-                      onStart: () => Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const TopicDetailPage()),
-                      ),
-                    ),
-                    SizedBox(height: AppSpacing.md),
-                    _ContinueCard(
-                      onResume: () => _comingSoon(context, 'Resume'),
-                    ),
-                    SizedBox(height: AppSpacing.md),
-                    const _WeakTopicsCard(),
-                  ],
+                  ),
                 ),
               ),
-            ),
-            AppBottomNavBar(
-              currentIndex: 0,
-              onTap: (i) {
-                if (i == 0) return;
-                if (i == 1) {
+              AppBottomNavBar(
+                currentIndex: 0,
+                onTap: (i) {
+                  if (i == 0) return;
+                  if (i == 1) {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const PracticePage()),
+                    );
+                    return;
+                  }
+                  if (i == 2) {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const ProgressPage()),
+                    );
+                    return;
+                  }
                   Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const PracticePage()),
+                    MaterialPageRoute(builder: (_) => const ProfilePage()),
                   );
-                  return;
-                }
-                if (i == 2) {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const ProgressPage()),
-                  );
-                  return;
-                }
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const ProfilePage()),
-                );
-              },
-            ),
-          ],
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
+}
+
+/// Reloads the [ProgressCubit] whenever the home page becomes visible again
+/// after a nested route (track/module/practice) pops back, so the Continue
+/// card's mastery score and focus areas stay fresh.
+class _HomeLifecycle extends StatefulWidget {
+  const _HomeLifecycle({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_HomeLifecycle> createState() => _HomeLifecycleState();
+}
+
+class _HomeLifecycleState extends State<_HomeLifecycle> with RouteAware {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    routeObserver.subscribe(this, ModalRoute.of(context)!);
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  @override
+  void didPopNext() {
+    if (mounted) context.read<ProgressCubit>().load();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 /// Shared card chrome used across the home screen's sections. Pass
@@ -194,49 +329,66 @@ class _ActivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _HomeCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return BlocBuilder<ProgressCubit, ProgressState>(
+      builder: (context, state) {
+        final levels = state.summary?.activityLevels;
+        final days = levels?.length ?? 35;
+        return _HomeCard(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Text(
-                  'Activity (35 Days)',
-                  style: AppTypography.bodyLg.copyWith(
-                    color: AppColors.onSurface,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Readiness Levels',
-                    style: AppTypography.bodyMd.copyWith(
-                      color: AppColors.onSurfaceVariant,
-                      fontSize: 12.sp,
+                  Expanded(
+                    child: Text(
+                      'Activity ($days Days)',
+                      style: AppTypography.bodyLg.copyWith(
+                        color: AppColors.onSurface,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
-                  SizedBox(height: AppSpacing.xs),
-                  const ReadinessLegend(),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        'Readiness Levels',
+                        style: AppTypography.bodyMd.copyWith(
+                          color: AppColors.onSurfaceVariant,
+                          fontSize: 12.sp,
+                        ),
+                      ),
+                      SizedBox(height: AppSpacing.xs),
+                      const ReadinessLegend(),
+                    ],
+                  ),
                 ],
+              ),
+              SizedBox(height: AppSpacing.md),
+              ActivityHeatmap(
+                days: days,
+                columns: 7,
+                levels: levels,
+                streakDays: state.summary?.currentStreakDays ?? 0,
               ),
             ],
           ),
-          SizedBox(height: AppSpacing.md),
-          const ActivityHeatmap(days: 35, columns: 7),
-        ],
-      ),
+        );
+      },
     );
   }
 }
 
 class _DailyChallengeCard extends StatelessWidget {
-  const _DailyChallengeCard({required this.onStart});
+  const _DailyChallengeCard({
+    required this.trackName,
+    required this.trackId,
+    required this.onStart,
+  });
 
+  final String trackName;
+  final String trackId;
   final VoidCallback onStart;
 
   @override
@@ -256,16 +408,12 @@ class _DailyChallengeCard extends StatelessWidget {
                   ),
                 ),
               ),
-              Icon(
-                Icons.hub_rounded,
-                size: 20.r,
-                color: AppColors.primary,
-              ),
+              Icon(Icons.hub_rounded, size: 20.r, color: AppColors.primary),
             ],
           ),
           SizedBox(height: AppSpacing.sm),
           Text(
-            'Offline-first sync strategy',
+            'Ready for today\'s practice?',
             style: AppTypography.headlineMd.copyWith(
               color: AppColors.onSurface,
               fontSize: 22.sp,
@@ -273,17 +421,15 @@ class _DailyChallengeCard extends StatelessWidget {
           ),
           SizedBox(height: 2.r),
           Text(
-            'System Design Module',
+            'Keep your streak going',
             style: AppTypography.bodyMd.copyWith(
               color: AppColors.onSurfaceVariant,
             ),
           ),
           SizedBox(height: AppSpacing.md),
           Row(
-            children: const [
-              TrackPill(label: 'Kotlin', dotColor: Color(0xFF8B5CF6)),
-              SizedBox(width: 8),
-              TrackPill(label: 'Swift', dotColor: Color(0xFFF14C33)),
+            children: [
+              TrackPill(label: trackName, dotColor: AppColors.primary),
             ],
           ),
           SizedBox(height: AppSpacing.md),
@@ -293,9 +439,7 @@ class _DailyChallengeCard extends StatelessWidget {
               onPressed: onStart,
               style: ElevatedButton.styleFrom(
                 padding: EdgeInsets.symmetric(vertical: 14.r),
-                shape: RoundedRectangleBorder(
-                  borderRadius: AppRadius.radiusMd,
-                ),
+                shape: RoundedRectangleBorder(borderRadius: AppRadius.radiusMd),
               ),
               child: const Text('Start Challenge'),
             ),
@@ -307,12 +451,23 @@ class _DailyChallengeCard extends StatelessWidget {
 }
 
 class _ContinueCard extends StatelessWidget {
-  const _ContinueCard({required this.onResume});
+  const _ContinueCard({
+    required this.onResume,
+    required this.masteryScore,
+    required this.title,
+    required this.subtitle,
+    required this.buttonLabel,
+  });
 
   final VoidCallback onResume;
+  final double masteryScore;
+  final String title;
+  final String subtitle;
+  final String buttonLabel;
 
   @override
   Widget build(BuildContext context) {
+    final percent = (masteryScore * 100).clamp(0, 100).round();
     return _HomeCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -325,7 +480,7 @@ class _ContinueCard extends StatelessWidget {
           ),
           SizedBox(height: AppSpacing.sm),
           Text(
-            'Flutter Layout Constraints',
+            title,
             style: AppTypography.bodyLg.copyWith(
               color: AppColors.onSurface,
               fontWeight: FontWeight.w600,
@@ -333,7 +488,7 @@ class _ContinueCard extends StatelessWidget {
           ),
           SizedBox(height: 2.r),
           Text(
-            'Advanced UI Patterns',
+            subtitle,
             style: AppTypography.bodyMd.copyWith(
               color: AppColors.onSurfaceVariant,
             ),
@@ -351,7 +506,7 @@ class _ContinueCard extends StatelessWidget {
                       width: 48.r,
                       height: 48.r,
                       child: CircularProgressIndicator(
-                        value: 0.65,
+                        value: masteryScore.clamp(0.0, 1.0),
                         strokeWidth: 4,
                         backgroundColor: AppColors.outlineVariant,
                         valueColor: const AlwaysStoppedAnimation(
@@ -360,7 +515,7 @@ class _ContinueCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      '65',
+                      '$percent',
                       style: AppTypography.numeralLg.copyWith(
                         color: AppColors.onSurface,
                         fontSize: 14.sp,
@@ -370,13 +525,17 @@ class _ContinueCard extends StatelessWidget {
                 ),
               ),
               SizedBox(width: AppSpacing.sm),
-              Text(
-                'Mastery Score',
-                style: AppTypography.bodyMd.copyWith(
-                  color: AppColors.onSurfaceVariant,
+              Expanded(
+                child: Text(
+                  'Mastery Score',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.bodyMd.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
                 ),
               ),
-              const Spacer(),
+              SizedBox(width: AppSpacing.sm),
               OutlinedButton(
                 onPressed: onResume,
                 style: OutlinedButton.styleFrom(
@@ -388,7 +547,7 @@ class _ContinueCard extends StatelessWidget {
                     borderRadius: AppRadius.radiusMd,
                   ),
                 ),
-                child: const Text('Resume Course'),
+                child: Text(buttonLabel),
               ),
             ],
           ),
@@ -398,21 +557,10 @@ class _ContinueCard extends StatelessWidget {
   }
 }
 
-class _WeakTopicRow {
-  const _WeakTopicRow(this.label, this.dotColor);
-
-  final String label;
-  final Color dotColor;
-}
-
-const List<_WeakTopicRow> _kWeakTopics = [
-  _WeakTopicRow('Concurrency (iOS)', Color(0xFFF14C33)),
-  _WeakTopicRow('State Management (React Native)', Color(0xFF61DAFB)),
-  _WeakTopicRow('DI (Kotlin)', Color(0xFF8B5CF6)),
-];
-
 class _WeakTopicsCard extends StatelessWidget {
-  const _WeakTopicsCard();
+  const _WeakTopicsCard({required this.focusAreas});
+
+  final List<FocusArea> focusAreas;
 
   @override
   Widget build(BuildContext context) {
@@ -427,45 +575,104 @@ class _WeakTopicsCard extends StatelessWidget {
             ),
           ),
           SizedBox(height: AppSpacing.md),
-          for (final topic in _kWeakTopics)
-            Padding(
-              padding: EdgeInsets.only(
-                bottom: topic == _kWeakTopics.last ? 0 : AppSpacing.sm,
+          if (focusAreas.isEmpty)
+            Text(
+              'Nothing flagged yet — keep practicing modules and weak '
+              'spots will show up here.',
+              style: AppTypography.bodyMd.copyWith(
+                color: AppColors.onSurfaceVariant,
               ),
-              child: Container(
-                width: double.infinity,
-                padding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical: AppSpacing.sm,
+            )
+          else
+            for (final area in focusAreas)
+              Padding(
+                padding: EdgeInsets.only(
+                  bottom: area == focusAreas.last ? 0 : AppSpacing.sm,
                 ),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceContainerHigh,
-                  borderRadius: AppRadius.radiusFull,
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 8.r,
-                      height: 8.r,
-                      decoration: BoxDecoration(
-                        color: topic.dotColor,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: Text(
-                        topic.label,
-                        style: AppTypography.bodyMd.copyWith(
-                          color: AppColors.onSurface,
+                child: _WeakTopicRow(
+                  title: area.title,
+                  percent: area.percent,
+                  critical: area.critical,
+                  onTap: () {
+                    final trackId = area.trackId;
+                    final moduleId = area.moduleId;
+                    if (trackId == null || moduleId == null) return;
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => ModuleDetailPage(
+                          trackId: trackId,
+                          moduleId: moduleId,
                         ),
                       ),
-                    ),
-                  ],
+                    );
+                  },
+                ),
+              ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WeakTopicRow extends StatelessWidget {
+  const _WeakTopicRow({
+    required this.title,
+    required this.percent,
+    required this.critical,
+    required this.onTap,
+  });
+
+  final String title;
+  final double percent;
+  final bool critical;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: AppRadius.radiusFull,
+      child: Container(
+        width: double.infinity,
+        padding: EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceContainerHigh,
+          borderRadius: AppRadius.radiusFull,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 8.r,
+              height: 8.r,
+              decoration: BoxDecoration(
+                color: critical ? AppColors.error : AppColors.primary,
+                shape: BoxShape.circle,
+              ),
+            ),
+            SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.bodyMd.copyWith(
+                  color: AppColors.onSurface,
                 ),
               ),
             ),
-        ],
+            SizedBox(width: AppSpacing.sm),
+            Text(
+              '${(percent * 100).round()}%',
+              style: AppTypography.labelMono.copyWith(
+                color: AppColors.onSurfaceVariant,
+                fontSize: 12.sp,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

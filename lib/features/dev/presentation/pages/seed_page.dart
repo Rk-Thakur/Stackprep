@@ -7,6 +7,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../data/kotlin_swift_seeder.dart';
 
 class SeedPage extends StatefulWidget {
   const SeedPage({super.key});
@@ -22,13 +23,33 @@ class _SeedPageState extends State<SeedPage>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 4, vsync: this);
+    _tabs = TabController(length: 6, vsync: this);
   }
 
   @override
   void dispose() {
     _tabs.dispose();
     super.dispose();
+  }
+
+  Future<void> _seedApp() async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Seeding all tracks...')),
+    );
+    try {
+      final report = await const AppSeeder().seedAll();
+      final summary = report.entries
+          .map(
+            (e) =>
+                '${e.key}: ${e.value['modules']} modules, '
+                '${e.value['questions']} q, ${e.value['flipcards']} cards',
+          )
+          .join(' | ');
+      messenger.showSnackBar(SnackBar(content: Text('Seeded: $summary')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Seed error: $e')));
+    }
   }
 
   @override
@@ -39,6 +60,14 @@ class _SeedPageState extends State<SeedPage>
         title: const Text('Firestore Admin'),
         backgroundColor: AppColors.surfaceContainer,
         foregroundColor: AppColors.onSurface,
+        actions: [
+          TextButton.icon(
+            onPressed: _seedApp,
+            icon: const Icon(Icons.storage_rounded, size: 18),
+            label: const Text('Seed All'),
+            style: TextButton.styleFrom(foregroundColor: AppColors.primary),
+          ),
+        ],
         bottom: TabBar(
           controller: _tabs,
           isScrollable: true,
@@ -46,9 +75,11 @@ class _SeedPageState extends State<SeedPage>
           unselectedLabelColor: AppColors.onSurfaceVariant,
           indicatorColor: AppColors.primary,
           tabs: const [
-            Tab(text: 'Topics'),
+            Tab(text: 'Tracks'),
+            Tab(text: 'Modules'),
+            Tab(text: 'Content'),
             Tab(text: 'Questions'),
-            Tab(text: 'Progress'),
+            Tab(text: 'Flipcards'),
             Tab(text: 'User Profile'),
           ],
         ),
@@ -56,9 +87,11 @@ class _SeedPageState extends State<SeedPage>
       body: TabBarView(
         controller: _tabs,
         children: const [
-          _TopicsTab(),
+          _TracksTab(),
+          _ModulesTab(),
+          _ContentTab(),
           _QuestionsTab(),
-          _ProgressTab(),
+          _FlipcardsTab(),
           _UserProfileTab(),
         ],
       ),
@@ -67,221 +100,174 @@ class _SeedPageState extends State<SeedPage>
 }
 
 // =============================================================================
-// Topics Tab — Track → Topics list → Add/Edit topic with modules
+// Constants
 // =============================================================================
 
-const _kTracks = <String, int>{
+const _kTrackColors = <String, int>{
   'KOTLIN': 0xFF8B5CF6,
   'SWIFT': 0xFFF14C33,
   'FLUTTER': 0xFF2F6FED,
   'REACT_NATIVE': 0xFF61DAFB,
 };
 
+const _kTrackCategories = [
+  'Mobile',
+  'Backend',
+  'Frontend',
+  'Full Stack',
+  'Data',
+  'DevOps',
+];
+
 const _kLevels = ['BEGINNER', 'INTERMEDIATE', 'ADVANCED'];
 
 const _kCodeLanguages = [
-  'Kotlin', 'Swift', 'Dart', 'JavaScript', 'TypeScript',
-  'Java', 'Python', 'Go', 'Rust', 'C++', 'SQL', 'Bash', 'Other',
+  'Kotlin',
+  'Swift',
+  'Dart',
+  'JavaScript',
+  'TypeScript',
+  'Java',
+  'Python',
+  'Go',
+  'Rust',
+  'C++',
+  'SQL',
+  'Bash',
+  'Other',
 ];
 
-class _TopicsTab extends StatefulWidget {
-  const _TopicsTab();
+// =============================================================================
+// Tracks Tab — CRUD for tracks collection
+// =============================================================================
+
+class _TracksTab extends StatefulWidget {
+  const _TracksTab();
   @override
-  State<_TopicsTab> createState() => _TopicsTabState();
+  State<_TracksTab> createState() => _TracksTabState();
 }
 
-class _TopicsTabState extends State<_TopicsTab> {
-  String _selectedTrack = 'KOTLIN';
-  List<Map<String, dynamic>> _topics = [];
+class _TracksTabState extends State<_TracksTab> {
+  List<Map<String, dynamic>> _tracks = [];
   bool _loading = false;
   bool _showForm = false;
-  String? _editingTopicId;
+  String? _editingId;
 
   final _formKey = GlobalKey<FormState>();
   final _idCtrl = TextEditingController();
-  final _titleCtrl = TextEditingController();
+  final _nameCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
-  String _formLevel = 'INTERMEDIATE';
-  final _modules = <_ModuleEntry>[];
+  String _formCategory = 'Mobile';
+  int _formColor = 0xFF8B5CF6;
+  int _formOrder = 0;
   bool _saving = false;
 
   @override
   void initState() {
     super.initState();
-    _loadTopics();
+    _loadTracks();
   }
 
   @override
   void dispose() {
     _idCtrl.dispose();
-    _titleCtrl.dispose();
+    _nameCtrl.dispose();
     _descCtrl.dispose();
-    for (final m in _modules) {
-      m.dispose();
-    }
     super.dispose();
   }
 
-  Future<void> _loadTopics() async {
+  Future<void> _loadTracks() async {
     setState(() => _loading = true);
     try {
       final snap = await FirebaseFirestore.instance
-          .collection('topics')
-          .where('trackName', isEqualTo: _selectedTrack)
+          .collection('tracks')
+          .orderBy('order')
           .get();
       setState(() {
-        _topics = snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+        _tracks = snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
         _loading = false;
       });
     } catch (e) {
       setState(() => _loading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading topics: $e')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
 
   void _openAddForm() {
     _idCtrl.clear();
-    _titleCtrl.clear();
+    _nameCtrl.clear();
     _descCtrl.clear();
-    _formLevel = 'INTERMEDIATE';
-    for (final m in _modules) {
-      m.dispose();
-    }
-    _modules.clear();
-    _editingTopicId = null;
+    _formCategory = 'Mobile';
+    _formColor = 0xFF8B5CF6;
+    _formOrder = _tracks.length;
+    _editingId = null;
     setState(() => _showForm = true);
   }
 
-  void _openEditForm(Map<String, dynamic> topic) {
-    _idCtrl.text = topic['id'] ?? '';
-    _titleCtrl.text = topic['title'] ?? '';
-    _descCtrl.text = topic['description'] ?? '';
-    _formLevel = topic['level'] ?? 'INTERMEDIATE';
-    for (final m in _modules) {
-      m.dispose();
-    }
-    _modules.clear();
-    final rawModules = topic['modules'] as List<dynamic>? ?? [];
-    for (final rm in rawModules) {
-      final entry = _ModuleEntry();
-      entry.titleCtrl.text = rm['title'] ?? '';
-      entry.descCtrl.text = rm['description'] ?? '';
-      entry.taskCountCtrl.text = '${rm['taskCount'] ?? 0}';
-      entry.durationCtrl.text = rm['duration'] ?? '';
-      final rawContent = rm['content'] as List<dynamic>? ?? [];
-      for (final rc in rawContent) {
-        final typeStr = rc['type'] ?? 'explanation';
-        final type = _ContentType.values.firstWhere(
-          (t) => t.name == typeStr,
-          orElse: () => _ContentType.explanation,
-        );
-        final block = _ContentBlock(type: type);
-        block.headingCtrl.text = rc['text'] ?? '';
-        block.textCtrl.text = rc['text'] ?? '';
-        block.language = rc['language'] ?? 'Kotlin';
-        block.codeCtrl.text = rc['code'] ?? '';
-        entry.contentBlocks.add(block);
-      }
-      _modules.add(entry);
-    }
-    _editingTopicId = topic['id'];
+  void _openEditForm(Map<String, dynamic> track) {
+    _idCtrl.text = track['id'] ?? '';
+    _nameCtrl.text = track['name'] ?? '';
+    _descCtrl.text = track['description'] ?? '';
+    _formCategory = track['category'] ?? 'Mobile';
+    _formColor = track['color'] ?? 0xFF8B5CF6;
+    _formOrder = track['order'] ?? 0;
+    _editingId = track['id'];
     setState(() => _showForm = true);
   }
 
   void _closeForm() {
     setState(() {
       _showForm = false;
-      _editingTopicId = null;
+      _editingId = null;
     });
   }
 
-  void _addModule() => setState(() => _modules.add(_ModuleEntry()));
-
-  void _removeModule(int i) {
-    setState(() {
-      _modules[i].dispose();
-      _modules.removeAt(i);
-    });
-  }
-
-  Map<String, dynamic> _moduleToMap(_ModuleEntry m) {
-    final contentBlocks = <Map<String, dynamic>>[];
-    for (final block in m.contentBlocks) {
-      final b = <String, dynamic>{'type': block.type.name};
-      if (block.type == _ContentType.heading) {
-        b['text'] = block.headingCtrl.text.trim();
-      } else if (block.type == _ContentType.explanation) {
-        b['text'] = block.textCtrl.text.trim();
-      } else if (block.type == _ContentType.code) {
-        b['language'] = block.language;
-        b['code'] = block.codeCtrl.text;
-      }
-      contentBlocks.add(b);
-    }
-    return {
-      'title': m.titleCtrl.text.trim(),
-      'description': m.descCtrl.text.trim(),
-      'taskCount': int.tryParse(m.taskCountCtrl.text) ?? 0,
-      'duration': m.durationCtrl.text.trim(),
-      if (contentBlocks.isNotEmpty) 'content': contentBlocks,
-    };
-  }
-
-  Future<void> _saveTopic() async {
+  Future<void> _saveTrack() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
-      final modules = _modules.map(_moduleToMap).toList();
-      final docId = _editingTopicId ?? _idCtrl.text.trim();
-
-      await FirebaseFirestore.instance
-          .collection('topics')
-          .doc(docId)
-          .set({
-        'level': _formLevel,
-        'trackName': _selectedTrack,
-        'trackColor': _kTracks[_selectedTrack] ?? 0,
-        'title': _titleCtrl.text.trim(),
+      final docId = _editingId ?? _idCtrl.text.trim().toUpperCase();
+      await FirebaseFirestore.instance.collection('tracks').doc(docId).set({
+        'name': _nameCtrl.text.trim(),
         'description': _descCtrl.text.trim(),
-        'modules': modules,
-      });
+        'category': _formCategory,
+        'color': _formColor,
+        'order': _formOrder,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Topic $docId saved.')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Track $docId saved.')));
         _closeForm();
-        _loadTopics();
+        _loadTracks();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
-  Future<void> _deleteTopic(String id) async {
+  Future<void> _deleteTrack(String id) async {
     try {
-      await FirebaseFirestore.instance.collection('topics').doc(id).delete();
+      await FirebaseFirestore.instance.collection('tracks').doc(id).delete();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Topic $id deleted.')),
-        );
-        _loadTopics();
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Track $id deleted.')));
+        _loadTracks();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -295,179 +281,93 @@ class _TopicsTabState extends State<_TopicsTab> {
   Widget _buildListView() {
     return Column(
       children: [
-        // Track selector
-        Container(
-          padding: EdgeInsets.symmetric(
-              horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-          color: AppColors.surfaceContainer,
-          child: Row(
-            children: [
-              _SectionLabel('TRACK'),
-              SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceContainerHigh,
-                    borderRadius: AppRadius.radiusMd,
-                    border: Border.all(color: AppColors.outlineVariant),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _selectedTrack,
-                      isExpanded: true,
-                      dropdownColor: AppColors.surfaceContainerHigh,
-                      items: _kTracks.keys
-                          .map((t) => DropdownMenuItem(
-                                value: t,
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 12.r,
-                                      height: 12.r,
-                                      decoration: BoxDecoration(
-                                        color: Color(_kTracks[t]!),
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                    SizedBox(width: AppSpacing.sm),
-                                    Text(t),
-                                  ],
-                                ),
-                              ))
-                          .toList(),
-                      onChanged: (v) {
-                        setState(() => _selectedTrack = v ?? 'KOTLIN');
-                        _loadTopics();
-                      },
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        // Topic list
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
-              : _topics.isEmpty
-                  ? Center(
-                      child: Text(
-                        'No topics for $_selectedTrack yet.',
-                        style: AppTypography.bodyMd.copyWith(
-                          color: AppColors.onSurfaceVariant,
-                        ),
-                      ),
-                    )
-                  : ListView.separated(
-                      padding: EdgeInsets.all(AppSpacing.md),
-                      itemCount: _topics.length,
-                      separatorBuilder: (_, __) =>
-                          SizedBox(height: AppSpacing.sm),
-                      itemBuilder: (context, i) {
-                        final t = _topics[i];
-                        final modules = t['modules'] as List<dynamic>? ?? [];
-                        return Container(
-                          padding: EdgeInsets.all(AppSpacing.sm),
-                          decoration: BoxDecoration(
-                            color: AppColors.surfaceContainer,
-                            borderRadius: AppRadius.radiusMd,
-                            border: Border.all(
-                                color: AppColors.outlineVariant),
-                          ),
-                          child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: EdgeInsets.symmetric(
-                                        horizontal: 8.r,
-                                        vertical: 3.r),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.primaryContainer,
-                                      borderRadius:
-                                          AppRadius.radiusSm,
-                                    ),
-                                    child: Text(
-                                      t['level'] ?? '',
-                                      style: AppTypography.codeSm
-                                          .copyWith(
-                                        color: AppColors
-                                            .onPrimaryContainer,
-                                        fontSize: 10.sp,
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(width: AppSpacing.sm),
-                                  Expanded(
-                                    child: Text(
-                                      t['title'] ?? t['id'],
-                                      style: AppTypography.bodyMd
-                                          .copyWith(
-                                        color: AppColors.onSurface,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                  IconButton(
-                                    onPressed: () =>
-                                        _openEditForm(t),
-                                    icon: const Icon(
-                                        Icons.edit_rounded,
-                                        size: 18),
-                                    color: AppColors.primary,
-                                    padding: EdgeInsets.zero,
-                                    constraints:
-                                        const BoxConstraints(),
-                                  ),
-                                  SizedBox(width: AppSpacing.xs),
-                                  IconButton(
-                                    onPressed: () =>
-                                        _deleteTopic(t['id']),
-                                    icon: const Icon(
-                                        Icons.delete_rounded,
-                                        size: 18),
-                                    color: AppColors.error,
-                                    padding: EdgeInsets.zero,
-                                    constraints:
-                                        const BoxConstraints(),
-                                  ),
-                                ],
-                              ),
-                              if ((t['description'] ?? '')
-                                  .toString()
-                                  .isNotEmpty) ...[
-                                SizedBox(height: AppSpacing.xs),
-                                Text(
-                                  t['description'],
-                                  style: AppTypography.codeSm
-                                      .copyWith(
-                                    color: AppColors
-                                        .onSurfaceVariant,
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                              SizedBox(height: AppSpacing.xs),
-                              Text(
-                                '${modules.length} module${modules.length == 1 ? '' : 's'}',
-                                style: AppTypography.codeSm
-                                    .copyWith(
-                                  color:
-                                      AppColors.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
+              : _tracks.isEmpty
+              ? Center(
+                  child: Text(
+                    'No tracks yet.',
+                    style: AppTypography.bodyMd.copyWith(
+                      color: AppColors.onSurfaceVariant,
                     ),
+                  ),
+                )
+              : ListView.separated(
+                  padding: EdgeInsets.all(AppSpacing.md),
+                  itemCount: _tracks.length,
+                  separatorBuilder: (_, __) => SizedBox(height: AppSpacing.sm),
+                  itemBuilder: (context, i) {
+                    final t = _tracks[i];
+                    return Container(
+                      padding: EdgeInsets.all(AppSpacing.sm),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceContainer,
+                        borderRadius: AppRadius.radiusMd,
+                        border: Border.all(color: AppColors.outlineVariant),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 14.r,
+                            height: 14.r,
+                            decoration: BoxDecoration(
+                              color: Color(t['color'] ?? 0xFF888888),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  t['name'] ?? t['id'],
+                                  style: AppTypography.bodyMd.copyWith(
+                                    color: AppColors.onSurface,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                if ((t['category'] ?? '').toString().isNotEmpty)
+                                  Text(
+                                    t['category'],
+                                    style: AppTypography.codeSm.copyWith(
+                                      color: AppColors.onSurfaceVariant,
+                                      fontSize: 10.sp,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          Text(
+                            'order: ${t['order'] ?? 0}',
+                            style: AppTypography.codeSm.copyWith(
+                              color: AppColors.onSurfaceVariant,
+                              fontSize: 10.sp,
+                            ),
+                          ),
+                          SizedBox(width: AppSpacing.sm),
+                          IconButton(
+                            onPressed: () => _openEditForm(t),
+                            icon: const Icon(Icons.edit_rounded, size: 18),
+                            color: AppColors.primary,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                          SizedBox(width: AppSpacing.xs),
+                          IconButton(
+                            onPressed: () => _deleteTrack(t['id']),
+                            icon: const Icon(Icons.delete_rounded, size: 18),
+                            color: AppColors.error,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
         ),
-        // Add button
         SafeArea(
           child: Padding(
             padding: EdgeInsets.all(AppSpacing.md),
@@ -476,7 +376,7 @@ class _TopicsTabState extends State<_TopicsTab> {
               child: ElevatedButton.icon(
                 onPressed: _openAddForm,
                 icon: const Icon(Icons.add, size: 18),
-                label: const Text('Add Topic'),
+                label: const Text('Add Track'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: AppColors.onPrimary,
@@ -496,10 +396,11 @@ class _TopicsTabState extends State<_TopicsTab> {
   Widget _buildFormView() {
     return Column(
       children: [
-        // Form header
         Container(
           padding: EdgeInsets.symmetric(
-              horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
+          ),
           color: AppColors.surfaceContainer,
           child: Row(
             children: [
@@ -511,9 +412,7 @@ class _TopicsTabState extends State<_TopicsTab> {
               SizedBox(width: AppSpacing.xs),
               Expanded(
                 child: Text(
-                  _editingTopicId != null
-                      ? 'Edit Topic'
-                      : 'New Topic — $_selectedTrack',
+                  _editingId != null ? 'Edit Track' : 'New Track',
                   style: AppTypography.bodyLg.copyWith(
                     color: AppColors.onSurface,
                     fontWeight: FontWeight.w600,
@@ -523,7 +422,6 @@ class _TopicsTabState extends State<_TopicsTab> {
             ],
           ),
         ),
-        // Form body
         Expanded(
           child: SingleChildScrollView(
             padding: EdgeInsets.all(AppSpacing.md),
@@ -532,22 +430,22 @@ class _TopicsTabState extends State<_TopicsTab> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (_editingTopicId == null) ...[
-                    _SectionLabel('TOPIC ID'),
+                  if (_editingId == null) ...[
+                    _SectionLabel('TRACK ID'),
                     SizedBox(height: AppSpacing.xs),
                     _Field(
                       controller: _idCtrl,
-                      hint: 'e.g. KTN_COR',
+                      hint: 'e.g. KOTLIN',
                       validator: (v) =>
                           v == null || v.isEmpty ? 'Required' : null,
                     ),
                     SizedBox(height: AppSpacing.md),
                   ],
-                  _SectionLabel('TITLE'),
+                  _SectionLabel('NAME'),
                   SizedBox(height: AppSpacing.xs),
                   _Field(
-                    controller: _titleCtrl,
-                    hint: 'e.g. Kotlin Coroutines',
+                    controller: _nameCtrl,
+                    hint: 'e.g. Kotlin',
                     validator: (v) =>
                         v == null || v.isEmpty ? 'Required' : null,
                   ),
@@ -556,66 +454,91 @@ class _TopicsTabState extends State<_TopicsTab> {
                   SizedBox(height: AppSpacing.xs),
                   _Field(
                     controller: _descCtrl,
-                    hint: 'Topic description',
+                    hint: 'Track description',
                     maxLines: 3,
                   ),
                   SizedBox(height: AppSpacing.md),
-                  _SectionLabel('LEVEL'),
+                  _SectionLabel('CATEGORY'),
                   SizedBox(height: AppSpacing.xs),
                   Container(
-                    padding:
-                        EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
                     decoration: BoxDecoration(
                       color: AppColors.surfaceContainer,
                       borderRadius: AppRadius.radiusMd,
-                      border:
-                          Border.all(color: AppColors.outlineVariant),
+                      border: Border.all(color: AppColors.outlineVariant),
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<String>(
-                        value: _formLevel,
+                        value: _formCategory,
                         isExpanded: true,
-                        dropdownColor:
-                            AppColors.surfaceContainerHigh,
-                        items: _kLevels
-                            .map((l) => DropdownMenuItem(
-                                  value: l,
-                                  child: Text(l),
-                                ))
+                        dropdownColor: AppColors.surfaceContainerHigh,
+                        items: _kTrackCategories
+                            .map(
+                              (c) => DropdownMenuItem(value: c, child: Text(c)),
+                            )
                             .toList(),
-                        onChanged: (v) => setState(
-                            () => _formLevel = v ?? 'INTERMEDIATE'),
+                        onChanged: (v) =>
+                            setState(() => _formCategory = v ?? 'Mobile'),
                       ),
                     ),
                   ),
-                  SizedBox(height: AppSpacing.lg),
-                  // Modules
-                  Row(
-                    children: [
-                      _SectionLabel('MODULES'),
-                      const Spacer(),
-                      TextButton.icon(
-                        onPressed: _addModule,
-                        icon: const Icon(Icons.add, size: 18),
-                        label: const Text('Add Module'),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: AppSpacing.sm),
-                  for (var i = 0; i < _modules.length; i++)
-                    _ModuleCard(
-                      entry: _modules[i],
-                      index: i,
-                      onRemove: () => _removeModule(i),
+                  SizedBox(height: AppSpacing.md),
+                  _SectionLabel('COLOR'),
+                  SizedBox(height: AppSpacing.xs),
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceContainer,
+                      borderRadius: AppRadius.radiusMd,
+                      border: Border.all(color: AppColors.outlineVariant),
                     ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<int>(
+                        value: _formColor,
+                        isExpanded: true,
+                        dropdownColor: AppColors.surfaceContainerHigh,
+                        items: _kTrackColors.entries
+                            .map(
+                              (e) => DropdownMenuItem(
+                                value: e.value,
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 12.r,
+                                      height: 12.r,
+                                      decoration: BoxDecoration(
+                                        color: Color(e.value),
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                    SizedBox(width: AppSpacing.sm),
+                                    Text(e.key),
+                                  ],
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (v) =>
+                            setState(() => _formColor = v ?? 0xFF888888),
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.md),
+                  _SectionLabel('ORDER'),
+                  SizedBox(height: AppSpacing.xs),
+                  _Field(
+                    controller: TextEditingController(text: '$_formOrder'),
+                    hint: '0',
+                    validator: (v) =>
+                        v == null || v.isEmpty ? 'Required' : null,
+                  ),
                   SizedBox(height: AppSpacing.lg),
                   ElevatedButton(
-                    onPressed: _saving ? null : _saveTopic,
+                    onPressed: _saving ? null : _saveTrack,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       foregroundColor: AppColors.onPrimary,
-                      padding:
-                          EdgeInsets.symmetric(vertical: 14.r),
+                      padding: EdgeInsets.symmetric(vertical: 14.r),
                       shape: RoundedRectangleBorder(
                         borderRadius: AppRadius.radiusMd,
                       ),
@@ -624,13 +547,13 @@ class _TopicsTabState extends State<_TopicsTab> {
                         ? SizedBox(
                             height: 20.r,
                             width: 20.r,
-                            child:
-                                const CircularProgressIndicator(
-                                    strokeWidth: 2),
+                            child: const CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
                           )
-                        : Text(_editingTopicId != null
-                            ? 'Update Topic'
-                            : 'Save Topic'),
+                        : Text(
+                            _editingId != null ? 'Update Track' : 'Save Track',
+                          ),
                   ),
                 ],
               ),
@@ -643,342 +566,1055 @@ class _TopicsTabState extends State<_TopicsTab> {
 }
 
 // =============================================================================
-// Module entry + card (with content blocks)
+// Modules Tab — tracks/{id}/modules subcollection
 // =============================================================================
 
-enum _ContentType { heading, explanation, code }
-
-class _ContentBlock {
-  _ContentBlock({required this.type});
-  final _ContentType type;
-  final headingCtrl = TextEditingController();
-  final textCtrl = TextEditingController();
-  final codeCtrl = TextEditingController();
-  String language = 'Kotlin';
-
-  void dispose() {
-    headingCtrl.dispose();
-    textCtrl.dispose();
-    codeCtrl.dispose();
-  }
+class _ModulesTab extends StatefulWidget {
+  const _ModulesTab();
+  @override
+  State<_ModulesTab> createState() => _ModulesTabState();
 }
 
-class _ModuleEntry {
-  final titleCtrl = TextEditingController();
-  final descCtrl = TextEditingController();
-  final taskCountCtrl = TextEditingController(text: '5');
-  final durationCtrl = TextEditingController(text: '~20m');
-  final contentBlocks = <_ContentBlock>[];
+class _ModulesTabState extends State<_ModulesTab> {
+  String _selectedTrackId = 'KOTLIN';
+  List<Map<String, dynamic>> _tracks = [];
+  List<Map<String, dynamic>> _modules = [];
+  bool _loadingModules = false;
+  bool _showForm = false;
+  String? _editingId;
 
-  void dispose() {
-    titleCtrl.dispose();
-    descCtrl.dispose();
-    taskCountCtrl.dispose();
-    durationCtrl.dispose();
-    for (final b in contentBlocks) {
-      b.dispose();
-    }
-  }
-}
-
-class _ModuleCard extends StatefulWidget {
-  const _ModuleCard({
-    required this.entry,
-    required this.index,
-    required this.onRemove,
-  });
-
-  final _ModuleEntry entry;
-  final int index;
-  final VoidCallback onRemove;
+  final _formKey = GlobalKey<FormState>();
+  final _idCtrl = TextEditingController();
+  final _titleCtrl = TextEditingController();
+  final _descCtrl = TextEditingController();
+  final _objectivesCtrl = TextEditingController();
+  int _formOrder = 0;
+  bool _saving = false;
 
   @override
-  State<_ModuleCard> createState() => _ModuleCardState();
-}
-
-class _ModuleCardState extends State<_ModuleCard> {
-  void _addContentBlock(_ContentType type) {
-    setState(() =>
-        widget.entry.contentBlocks.add(_ContentBlock(type: type)));
+  void initState() {
+    super.initState();
+    _loadTracks();
   }
 
-  void _removeContentBlock(int i) {
+  @override
+  void dispose() {
+    _idCtrl.dispose();
+    _titleCtrl.dispose();
+    _descCtrl.dispose();
+    _objectivesCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadTracks() async {
+    setState(() => _loadingModules = true);
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('tracks')
+          .orderBy('order')
+          .get();
+      _tracks = snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+      if (_tracks.isNotEmpty) {
+        _selectedTrackId = _tracks.first['id'] as String;
+      }
+      setState(() => _loadingModules = false);
+      await _loadModules();
+    } catch (e) {
+      setState(() => _loadingModules = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
+  Future<void> _loadModules() async {
+    setState(() => _loadingModules = true);
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('tracks')
+          .doc(_selectedTrackId)
+          .collection('modules')
+          .orderBy('order')
+          .get();
+      setState(() {
+        _modules = snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+        _loadingModules = false;
+      });
+    } catch (e) {
+      setState(() => _loadingModules = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
+  void _openAddForm() {
+    _idCtrl.clear();
+    _titleCtrl.clear();
+    _descCtrl.clear();
+    _objectivesCtrl.clear();
+    _formOrder = _modules.length;
+    _editingId = null;
+    setState(() => _showForm = true);
+  }
+
+  void _openEditForm(Map<String, dynamic> mod) {
+    _idCtrl.text = mod['id'] ?? '';
+    _titleCtrl.text = mod['title'] ?? '';
+    _descCtrl.text = mod['description'] ?? '';
+    final objectives = mod['learningObjectives'] as List<dynamic>? ?? [];
+    _objectivesCtrl.text = objectives.join('\n');
+    _formOrder = mod['order'] ?? 0;
+    _editingId = mod['id'];
+    setState(() => _showForm = true);
+  }
+
+  void _closeForm() {
     setState(() {
-      widget.entry.contentBlocks[i].dispose();
-      widget.entry.contentBlocks.removeAt(i);
+      _showForm = false;
+      _editingId = null;
     });
   }
 
+  Future<void> _saveModule() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _saving = true);
+    try {
+      final docId =
+          _editingId ??
+          (_idCtrl.text.trim().isNotEmpty
+              ? _idCtrl.text.trim()
+              : '${_selectedTrackId}_MOD_${DateTime.now().millisecondsSinceEpoch}');
+
+      final data = {
+        'title': _titleCtrl.text.trim(),
+        'description': _descCtrl.text.trim(),
+        'learningObjectives': _objectivesCtrl.text
+            .split('\n')
+            .map((s) => s.trim())
+            .where((s) => s.isNotEmpty)
+            .toList(),
+        'order': _formOrder,
+        'trackId': _selectedTrackId,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      await FirebaseFirestore.instance
+          .collection('tracks')
+          .doc(_selectedTrackId)
+          .collection('modules')
+          .doc(docId)
+          .set(data, SetOptions(merge: true));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Module $docId saved.')));
+        _closeForm();
+        _loadModules();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _deleteModule(String id) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('tracks')
+          .doc(_selectedTrackId)
+          .collection('modules')
+          .doc(id)
+          .delete();
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Module $id deleted.')));
+        _loadModules();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final m = widget.entry;
-    return Container(
-      margin: EdgeInsets.only(bottom: AppSpacing.sm),
-      padding: EdgeInsets.all(AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainer,
-        borderRadius: AppRadius.radiusMd,
-        border: Border.all(color: AppColors.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Text(
-                'Module ${widget.index + 1}',
-                style: AppTypography.bodyMd.copyWith(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const Spacer(),
-              IconButton(
-                onPressed: widget.onRemove,
-                icon:
-                    const Icon(Icons.close_rounded, size: 18),
-                color: AppColors.error,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-              ),
-            ],
+    if (_showForm) return _buildFormView();
+    return _buildListView();
+  }
+
+  Widget _buildListView() {
+    return Column(
+      children: [
+        Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
           ),
-          SizedBox(height: AppSpacing.xs),
-          _Field(controller: m.titleCtrl, hint: 'Module title'),
-          SizedBox(height: AppSpacing.xs),
-          _Field(
-              controller: m.descCtrl,
-              hint: 'Module description',
-              maxLines: 2),
-          SizedBox(height: AppSpacing.xs),
-          Row(
+          color: AppColors.surfaceContainer,
+          child: Row(
             children: [
-              Expanded(
-                child: _Field(
-                    controller: m.taskCountCtrl,
-                    hint: 'Tasks',
-                    isDense: true),
-              ),
+              _SectionLabel('TRACK'),
               SizedBox(width: AppSpacing.sm),
               Expanded(
-                child: _Field(
-                    controller: m.durationCtrl,
-                    hint: 'Duration',
-                    isDense: true),
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceContainerHigh,
+                    borderRadius: AppRadius.radiusMd,
+                    border: Border.all(color: AppColors.outlineVariant),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _selectedTrackId,
+                      isExpanded: true,
+                      dropdownColor: AppColors.surfaceContainerHigh,
+                      items: _tracks
+                          .map(
+                            (t) => DropdownMenuItem(
+                              value: t['id'] as String,
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 12.r,
+                                    height: 12.r,
+                                    decoration: BoxDecoration(
+                                      color: Color(t['color'] ?? 0xFF888888),
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  SizedBox(width: AppSpacing.sm),
+                                  Text(t['name'] ?? t['id']),
+                                ],
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (v) {
+                        setState(
+                          () => _selectedTrackId = v ?? _selectedTrackId,
+                        );
+                        _loadModules();
+                      },
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
-          SizedBox(height: AppSpacing.sm),
-          // Content blocks header
-          Container(
-            padding: EdgeInsets.symmetric(
-                horizontal: AppSpacing.sm, vertical: 6.r),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceContainerHigh,
-              borderRadius: AppRadius.radiusSm,
-            ),
-            child: Row(
-              children: [
-                Text(
-                  'CONTENT',
-                  style: AppTypography.labelMono.copyWith(
-                    color: AppColors.onSurfaceVariant,
-                    fontSize: 10.sp,
-                  ),
-                ),
-                const Spacer(),
-                _ContentAddButton(
-                  label: 'Heading',
-                  icon: Icons.title,
-                  onTap: () => _addContentBlock(
-                      _ContentType.heading),
-                ),
-                _ContentAddButton(
-                  label: 'Text',
-                  icon: Icons.notes,
-                  onTap: () => _addContentBlock(
-                      _ContentType.explanation),
-                ),
-                _ContentAddButton(
-                  label: 'Code',
-                  icon: Icons.code,
-                  onTap: () => _addContentBlock(
-                      _ContentType.code),
-                ),
-              ],
-            ),
-          ),
-          for (var i = 0;
-              i < m.contentBlocks.length;
-              i++)
-            _ContentBlockCard(
-              block: m.contentBlocks[i],
-              index: i,
-              onRemove: () => _removeContentBlock(i),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ContentAddButton extends StatelessWidget {
-  const _ContentAddButton({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-            horizontal: 6.r, vertical: 4.r),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14.r, color: AppColors.primary),
-            SizedBox(width: 2.r),
-            Text(
-              label,
-              style: AppTypography.codeSm.copyWith(
-                color: AppColors.primary,
-                fontSize: 10.sp,
-              ),
-            ),
-          ],
         ),
-      ),
-    );
-  }
-}
-
-class _ContentBlockCard extends StatelessWidget {
-  const _ContentBlockCard({
-    required this.block,
-    required this.index,
-    required this.onRemove,
-  });
-
-  final _ContentBlock block;
-  final int index;
-  final VoidCallback onRemove;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: EdgeInsets.only(top: AppSpacing.xs),
-      padding: EdgeInsets.all(AppSpacing.xs),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainerLow,
-        borderRadius: AppRadius.radiusSm,
-        border: Border.all(
-          color:
-              AppColors.outlineVariant.withValues(alpha: 0.5),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Icon(
-                block.type == _ContentType.heading
-                    ? Icons.title
-                    : block.type == _ContentType.explanation
-                        ? Icons.notes
-                        : Icons.code,
-                size: 14.r,
-                color: AppColors.primary,
-              ),
-              SizedBox(width: 4.r),
-              Text(
-                '${block.type.name.toUpperCase()} ${index + 1}',
-                style: AppTypography.labelMono.copyWith(
-                  color: AppColors.onSurfaceVariant,
-                  fontSize: 10.sp,
-                ),
-              ),
-              const Spacer(),
-              IconButton(
-                onPressed: onRemove,
-                icon: const Icon(Icons.close_rounded,
-                    size: 14),
-                color: AppColors.onSurfaceVariant,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-              ),
-            ],
-          ),
-          SizedBox(height: 4.r),
-          if (block.type == _ContentType.heading)
-            _Field(
-              controller: block.headingCtrl,
-              hint: 'Heading text',
-              isDense: true,
-            )
-          else if (block.type ==
-              _ContentType.explanation)
-            _Field(
-              controller: block.textCtrl,
-              hint: 'Explanation text',
-              maxLines: 4,
-              isDense: true,
-            )
-          else ...[
-            Container(
-              padding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceContainer,
-                borderRadius: AppRadius.radiusSm,
-                border: Border.all(
-                    color: AppColors.outlineVariant),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: block.language,
-                  isDense: true,
-                  isExpanded: true,
-                  dropdownColor:
-                      AppColors.surfaceContainerHigh,
-                  style: AppTypography.codeSm.copyWith(
-                    color: AppColors.onSurface,
-                    fontSize: 12.sp,
+        Expanded(
+          child: _loadingModules
+              ? const Center(child: CircularProgressIndicator())
+              : _modules.isEmpty
+              ? Center(
+                  child: Text(
+                    'No modules in this track yet.',
+                    style: AppTypography.bodyMd.copyWith(
+                      color: AppColors.onSurfaceVariant,
+                    ),
                   ),
-                  items: _kCodeLanguages
-                      .map((l) => DropdownMenuItem(
-                          value: l, child: Text(l)))
-                      .toList(),
-                  onChanged: (v) {
-                    block.language = v ?? 'Kotlin';
+                )
+              : ListView.separated(
+                  padding: EdgeInsets.all(AppSpacing.md),
+                  itemCount: _modules.length,
+                  separatorBuilder: (_, __) => SizedBox(height: AppSpacing.sm),
+                  itemBuilder: (context, i) {
+                    final m = _modules[i];
+                    final content = m['content'] as List<dynamic>? ?? [];
+                    final objectives =
+                        m['learningObjectives'] as List<dynamic>? ?? [];
+                    return Container(
+                      padding: EdgeInsets.all(AppSpacing.sm),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceContainer,
+                        borderRadius: AppRadius.radiusMd,
+                        border: Border.all(color: AppColors.outlineVariant),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 6.r,
+                                  vertical: 2.r,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primaryContainer,
+                                  borderRadius: AppRadius.radiusSm,
+                                ),
+                                child: Text(
+                                  '#${m['order'] ?? i}',
+                                  style: AppTypography.codeSm.copyWith(
+                                    color: AppColors.onPrimaryContainer,
+                                    fontSize: 9.sp,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(width: AppSpacing.sm),
+                              Expanded(
+                                child: Text(
+                                  m['title'] ?? m['id'],
+                                  style: AppTypography.bodyMd.copyWith(
+                                    color: AppColors.onSurface,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: () => _openEditForm(m),
+                                icon: const Icon(Icons.edit_rounded, size: 18),
+                                color: AppColors.primary,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                              ),
+                              SizedBox(width: AppSpacing.xs),
+                              IconButton(
+                                onPressed: () => _deleteModule(m['id']),
+                                icon: const Icon(
+                                  Icons.delete_rounded,
+                                  size: 18,
+                                ),
+                                color: AppColors.error,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                              ),
+                            ],
+                          ),
+                          if ((m['description'] ?? '')
+                              .toString()
+                              .isNotEmpty) ...[
+                            SizedBox(height: AppSpacing.xs),
+                            Text(
+                              m['description'],
+                              style: AppTypography.codeSm.copyWith(
+                                color: AppColors.onSurfaceVariant,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                          SizedBox(height: AppSpacing.xs),
+                          Row(
+                            children: [
+                              Text(
+                                '${content.length} content block${content.length == 1 ? '' : 's'}',
+                                style: AppTypography.codeSm.copyWith(
+                                  color: AppColors.onSurfaceVariant,
+                                  fontSize: 10.sp,
+                                ),
+                              ),
+                              if (objectives.isNotEmpty) ...[
+                                SizedBox(width: AppSpacing.sm),
+                                Text(
+                                  '${objectives.length} objective${objectives.length == 1 ? '' : 's'}',
+                                  style: AppTypography.codeSm.copyWith(
+                                    color: AppColors.onSurfaceVariant,
+                                    fontSize: 10.sp,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
                   },
                 ),
+        ),
+        SafeArea(
+          child: Padding(
+            padding: EdgeInsets.all(AppSpacing.md),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _openAddForm,
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Add Module'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: AppColors.onPrimary,
+                  padding: EdgeInsets.symmetric(vertical: 14.r),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: AppRadius.radiusMd,
+                  ),
+                ),
               ),
             ),
-            SizedBox(height: 4.r),
-            _Field(
-              controller: block.codeCtrl,
-              hint:
-                  'Paste implementation code here...',
-              maxLines: 10,
-              isDense: true,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFormView() {
+    return Column(
+      children: [
+        Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
+          ),
+          color: AppColors.surfaceContainer,
+          child: Row(
+            children: [
+              IconButton(
+                onPressed: _closeForm,
+                icon: const Icon(Icons.arrow_back_rounded),
+                color: AppColors.onSurface,
+              ),
+              SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: Text(
+                  _editingId != null
+                      ? 'Edit Module'
+                      : 'New Module — $_selectedTrackId',
+                  style: AppTypography.bodyLg.copyWith(
+                    color: AppColors.onSurface,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(AppSpacing.md),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (_editingId == null) ...[
+                    _SectionLabel('MODULE ID'),
+                    SizedBox(height: AppSpacing.xs),
+                    _Field(controller: _idCtrl, hint: 'e.g. basics_builders'),
+                    SizedBox(height: AppSpacing.md),
+                  ],
+                  _SectionLabel('TITLE'),
+                  SizedBox(height: AppSpacing.xs),
+                  _Field(
+                    controller: _titleCtrl,
+                    hint: 'e.g. Basics & Builders',
+                    validator: (v) =>
+                        v == null || v.isEmpty ? 'Required' : null,
+                  ),
+                  SizedBox(height: AppSpacing.md),
+                  _SectionLabel('DESCRIPTION'),
+                  SizedBox(height: AppSpacing.xs),
+                  _Field(
+                    controller: _descCtrl,
+                    hint: 'Module description',
+                    maxLines: 3,
+                  ),
+                  SizedBox(height: AppSpacing.md),
+                  _SectionLabel('LEARNING OBJECTIVES (one per line)'),
+                  SizedBox(height: AppSpacing.xs),
+                  _Field(
+                    controller: _objectivesCtrl,
+                    hint: 'Understand Kotlin basics\nBuild simple apps',
+                    maxLines: 4,
+                  ),
+                  SizedBox(height: AppSpacing.md),
+                  _SectionLabel('ORDER'),
+                  SizedBox(height: AppSpacing.xs),
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceContainer,
+                      borderRadius: AppRadius.radiusMd,
+                      border: Border.all(color: AppColors.outlineVariant),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<int>(
+                        value: _formOrder,
+                        isExpanded: true,
+                        dropdownColor: AppColors.surfaceContainerHigh,
+                        items: List.generate(
+                          _modules.length + 1,
+                          (i) => DropdownMenuItem(value: i, child: Text('$i')),
+                        ),
+                        onChanged: (v) => setState(() => _formOrder = v ?? 0),
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.lg),
+                  ElevatedButton(
+                    onPressed: _saving ? null : _saveModule,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: AppColors.onPrimary,
+                      padding: EdgeInsets.symmetric(vertical: 14.r),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: AppRadius.radiusMd,
+                      ),
+                    ),
+                    child: _saving
+                        ? SizedBox(
+                            height: 20.r,
+                            width: 20.r,
+                            child: const CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : Text(
+                            _editingId != null
+                                ? 'Update Module'
+                                : 'Save Module',
+                          ),
+                  ),
+                ],
+              ),
             ),
-          ],
-        ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// =============================================================================
+// Content Tab — tracks/{id}/modules/{id} content blocks
+// =============================================================================
+
+class _ContentTab extends StatefulWidget {
+  const _ContentTab();
+  @override
+  State<_ContentTab> createState() => _ContentTabState();
+}
+
+class _ContentTabState extends State<_ContentTab> {
+  String _selectedTrackId = 'KOTLIN';
+  String? _selectedModuleId;
+  List<Map<String, dynamic>> _tracks = [];
+  List<Map<String, dynamic>> _modules = [];
+  bool _loadingModules = false;
+  bool _loadingContent = false;
+
+  List<Map<String, dynamic>> _contentBlocks = [];
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTracks();
+  }
+
+  Future<void> _loadTracks() async {
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('tracks')
+          .orderBy('order')
+          .get();
+      _tracks = snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+      if (_tracks.isNotEmpty) {
+        _selectedTrackId = _tracks.first['id'] as String;
+      }
+      setState(() {});
+      await _loadModules();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
+  Future<void> _loadModules() async {
+    setState(() {
+      _loadingModules = true;
+      _selectedModuleId = null;
+      _contentBlocks = [];
+    });
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('tracks')
+          .doc(_selectedTrackId)
+          .collection('modules')
+          .orderBy('order')
+          .get();
+      _modules = snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+      setState(() => _loadingModules = false);
+    } catch (e) {
+      setState(() => _loadingModules = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
+  Future<void> _loadContent() async {
+    if (_selectedModuleId == null) return;
+    setState(() => _loadingContent = true);
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('tracks')
+          .doc(_selectedTrackId)
+          .collection('modules')
+          .doc(_selectedModuleId)
+          .get();
+      final data = doc.data();
+      final raw = data?['content'] as List<dynamic>? ?? [];
+      setState(() {
+        _contentBlocks = raw.cast<Map<String, dynamic>>();
+        _loadingContent = false;
+      });
+    } catch (e) {
+      setState(() => _loadingContent = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
+  void _addBlock(String type) {
+    setState(() => _contentBlocks.add({'type': type}));
+  }
+
+  void _removeBlock(int i) {
+    setState(() => _contentBlocks.removeAt(i));
+  }
+
+  void _updateBlock(int i, String key, dynamic value) {
+    setState(() => _contentBlocks[i][key] = value);
+  }
+
+  Future<void> _saveContent() async {
+    if (_selectedModuleId == null) return;
+    setState(() => _saving = true);
+    try {
+      await FirebaseFirestore.instance
+          .collection('tracks')
+          .doc(_selectedTrackId)
+          .collection('modules')
+          .doc(_selectedModuleId)
+          .update({
+            'content': _contentBlocks,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Content saved.')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
+          ),
+          color: AppColors.surfaceContainer,
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  _SectionLabel('TRACK'),
+                  SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Container(
+                      padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceContainerHigh,
+                        borderRadius: AppRadius.radiusMd,
+                        border: Border.all(color: AppColors.outlineVariant),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedTrackId,
+                          isExpanded: true,
+                          dropdownColor: AppColors.surfaceContainerHigh,
+                          items: _tracks
+                              .map(
+                                (t) => DropdownMenuItem(
+                                  value: t['id'] as String,
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 12.r,
+                                        height: 12.r,
+                                        decoration: BoxDecoration(
+                                          color: Color(
+                                            t['color'] ?? 0xFF888888,
+                                          ),
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                      SizedBox(width: AppSpacing.sm),
+                                      Text(t['name'] ?? t['id']),
+                                    ],
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (v) {
+                            setState(
+                              () => _selectedTrackId = v ?? _selectedTrackId,
+                            );
+                            _loadModules();
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: AppSpacing.xs),
+              Row(
+                children: [
+                  _SectionLabel('MODULE'),
+                  SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: _loadingModules
+                        ? const Center(
+                            child: SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        : Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: AppSpacing.sm,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceContainerHigh,
+                              borderRadius: AppRadius.radiusMd,
+                              border: Border.all(
+                                color: AppColors.outlineVariant,
+                              ),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: _selectedModuleId,
+                                isExpanded: true,
+                                dropdownColor: AppColors.surfaceContainerHigh,
+                                hint: Text(
+                                  'Select a module',
+                                  style: TextStyle(
+                                    color: AppColors.onSurfaceVariant,
+                                  ),
+                                ),
+                                items: _modules
+                                    .map(
+                                      (m) => DropdownMenuItem<String>(
+                                        value: m['id'] as String,
+                                        child: Text(
+                                          m['title'] as String? ??
+                                              m['id'] as String,
+                                        ),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (v) {
+                                  setState(() => _selectedModuleId = v);
+                                  _loadContent();
+                                },
+                              ),
+                            ),
+                          ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: _selectedModuleId == null
+              ? Center(
+                  child: Text(
+                    'Select a module to manage its content.',
+                    style: AppTypography.bodyMd.copyWith(
+                      color: AppColors.onSurfaceVariant,
+                    ),
+                  ),
+                )
+              : _loadingContent
+              ? const Center(child: CircularProgressIndicator())
+              : _contentBlocks.isEmpty
+              ? Center(
+                  child: Text(
+                    'No content blocks yet. Add one below.',
+                    style: AppTypography.bodyMd.copyWith(
+                      color: AppColors.onSurfaceVariant,
+                    ),
+                  ),
+                )
+              : ListView.separated(
+                  padding: EdgeInsets.all(AppSpacing.md),
+                  itemCount: _contentBlocks.length,
+                  separatorBuilder: (_, __) => SizedBox(height: AppSpacing.sm),
+                  itemBuilder: (context, i) {
+                    final block = _contentBlocks[i];
+                    final type = block['type'] ?? 'explanation';
+                    return Container(
+                      padding: EdgeInsets.all(AppSpacing.sm),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceContainer,
+                        borderRadius: AppRadius.radiusMd,
+                        border: Border.all(color: AppColors.outlineVariant),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                type == 'heading'
+                                    ? Icons.title
+                                    : type == 'code'
+                                    ? Icons.code
+                                    : Icons.notes,
+                                size: 14.r,
+                                color: AppColors.primary,
+                              ),
+                              SizedBox(width: 4.r),
+                              Text(
+                                '${type.toString().toUpperCase()} ${i + 1}',
+                                style: AppTypography.labelMono.copyWith(
+                                  color: AppColors.onSurfaceVariant,
+                                  fontSize: 10.sp,
+                                ),
+                              ),
+                              const Spacer(),
+                              IconButton(
+                                onPressed: () => _removeBlock(i),
+                                icon: const Icon(Icons.close_rounded, size: 16),
+                                color: AppColors.error,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: AppSpacing.xs),
+                          if (type == 'heading')
+                            _ContentTextField(
+                              value: block['text'] ?? '',
+                              hint: 'Heading text',
+                              onChanged: (v) => _updateBlock(i, 'text', v),
+                            )
+                          else if (type == 'explanation')
+                            _ContentTextField(
+                              value: block['text'] ?? '',
+                              hint: 'Explanation text',
+                              maxLines: 4,
+                              onChanged: (v) => _updateBlock(i, 'text', v),
+                            )
+                          else ...[
+                            Container(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: AppSpacing.sm,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.surfaceContainerHigh,
+                                borderRadius: AppRadius.radiusSm,
+                                border: Border.all(
+                                  color: AppColors.outlineVariant,
+                                ),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: block['language'] ?? 'Kotlin',
+                                  isDense: true,
+                                  isExpanded: true,
+                                  dropdownColor: AppColors.surfaceContainerHigh,
+                                  style: AppTypography.codeSm.copyWith(
+                                    color: AppColors.onSurface,
+                                    fontSize: 12.sp,
+                                  ),
+                                  items: _kCodeLanguages
+                                      .map(
+                                        (l) => DropdownMenuItem(
+                                          value: l,
+                                          child: Text(l),
+                                        ),
+                                      )
+                                      .toList(),
+                                  onChanged: (v) => _updateBlock(
+                                    i,
+                                    'language',
+                                    v ?? 'Kotlin',
+                                  ),
+                                ),
+                              ),
+                            ),
+                            SizedBox(height: 4.r),
+                            _ContentTextField(
+                              value: block['code'] ?? '',
+                              hint: 'Paste code here...',
+                              maxLines: 10,
+                              onChanged: (v) => _updateBlock(i, 'code', v),
+                            ),
+                          ],
+                        ],
+                      ),
+                    );
+                  },
+                ),
+        ),
+        if (_selectedModuleId != null)
+          SafeArea(
+            child: Padding(
+              padding: EdgeInsets.all(AppSpacing.md),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _addBlock('heading'),
+                          icon: const Icon(Icons.title, size: 16),
+                          label: const Text('Heading'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.primary,
+                            side: const BorderSide(color: AppColors.primary),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: AppRadius.radiusMd,
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _addBlock('explanation'),
+                          icon: const Icon(Icons.notes, size: 16),
+                          label: const Text('Text'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.primary,
+                            side: const BorderSide(color: AppColors.primary),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: AppRadius.radiusMd,
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _addBlock('code'),
+                          icon: const Icon(Icons.code, size: 16),
+                          label: const Text('Code'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.primary,
+                            side: const BorderSide(color: AppColors.primary),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: AppRadius.radiusMd,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: AppSpacing.sm),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _saving ? null : _saveContent,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: AppColors.onPrimary,
+                        padding: EdgeInsets.symmetric(vertical: 14.r),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: AppRadius.radiusMd,
+                        ),
+                      ),
+                      child: _saving
+                          ? SizedBox(
+                              height: 20.r,
+                              width: 20.r,
+                              child: const CircularProgressIndicator(
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : const Text('Save Content'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _ContentTextField extends StatelessWidget {
+  const _ContentTextField({
+    required this.value,
+    required this.hint,
+    required this.onChanged,
+    this.maxLines = 1,
+  });
+
+  final String value;
+  final String hint;
+  final ValueChanged<String> onChanged;
+  final int maxLines;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      initialValue: value,
+      maxLines: maxLines,
+      onChanged: onChanged,
+      style: AppTypography.bodyMd.copyWith(color: AppColors.onSurface),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(
+          color: AppColors.onSurfaceVariant.withValues(alpha: 0.5),
+        ),
+        filled: true,
+        fillColor: AppColors.surfaceContainer,
+        contentPadding: EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm,
+          vertical: 12.r,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: AppRadius.radiusMd,
+          borderSide: const BorderSide(color: AppColors.outlineVariant),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: AppRadius.radiusMd,
+          borderSide: const BorderSide(color: AppColors.outlineVariant),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: AppRadius.radiusMd,
+          borderSide: const BorderSide(color: AppColors.primary),
+        ),
       ),
     );
   }
 }
 
 // =============================================================================
-// Questions Tab — Track → Topic → Level → Questions
+// Questions Tab — tracks/{id}/modules/{id}/questions subcollection
 // =============================================================================
 
 class _QuestionsTab extends StatefulWidget {
@@ -988,17 +1624,18 @@ class _QuestionsTab extends StatefulWidget {
 }
 
 class _QuestionsTabState extends State<_QuestionsTab> {
-  String _selectedTrack = 'KOTLIN';
-  String? _selectedTopicId;
-  List<Map<String, dynamic>> _topics = [];
-  bool _loadingTopics = false;
+  String _selectedTrackId = 'KOTLIN';
+  String? _selectedModuleId;
+  List<Map<String, dynamic>> _tracks = [];
+  List<Map<String, dynamic>> _modules = [];
+  bool _loadingTracks = false;
+  bool _loadingModules = false;
   String _selectedLevel = 'BEGINNER';
 
   final _formKey = GlobalKey<FormState>();
   final _docIdCtrl = TextEditingController();
   final _questionCtrl = TextEditingController();
-  final _optionCtrls =
-      List.generate(4, (_) => TextEditingController());
+  final _optionCtrls = List.generate(4, (_) => TextEditingController());
   int _correctIndex = 0;
   final _codeHeaderCtrl = TextEditingController();
   final _codeLangCtrl = TextEditingController();
@@ -1013,7 +1650,7 @@ class _QuestionsTabState extends State<_QuestionsTab> {
   @override
   void initState() {
     super.initState();
-    _loadTopicsForTrack();
+    _loadTracks();
   }
 
   @override
@@ -1029,53 +1666,83 @@ class _QuestionsTabState extends State<_QuestionsTab> {
     super.dispose();
   }
 
-  Future<void> _loadTopicsForTrack() async {
-    setState(() {
-      _loadingTopics = true;
-      _selectedTopicId = null;
-      _questions = [];
-    });
+  Future<void> _loadTracks() async {
+    setState(() => _loadingTracks = true);
     try {
       final snap = await FirebaseFirestore.instance
-          .collection('topics')
-          .where('trackName', isEqualTo: _selectedTrack)
+          .collection('tracks')
+          .orderBy('order')
           .get();
-      setState(() {
-        _topics =
-            snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
-        _loadingTopics = false;
-      });
+      _tracks = snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+      if (_tracks.isNotEmpty) {
+        _selectedTrackId = _tracks.first['id'] as String;
+      }
+      setState(() => _loadingTracks = false);
+      await _loadModules();
     } catch (e) {
-      setState(() => _loadingTopics = false);
+      setState(() => _loadingTracks = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
 
-  Future<void> _loadQuestions() async {
-    if (_selectedTopicId == null) return;
-    setState(() => _loadingQuestions = true);
+  Future<void> _loadModules() async {
+    setState(() {
+      _loadingModules = true;
+      _selectedModuleId = null;
+      _questions = [];
+    });
     try {
       final snap = await FirebaseFirestore.instance
-          .collection('topics')
-          .doc(_selectedTopicId)
-          .collection('questions')
+          .collection('tracks')
+          .doc(_selectedTrackId)
+          .collection('modules')
+          .orderBy('order')
           .get();
+      _modules = snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+      setState(() => _loadingModules = false);
+      await _loadAllQuestionsForTrack();
+    } catch (e) {
+      setState(() => _loadingModules = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
+  Future<void> _loadAllQuestionsForTrack() async {
+    setState(() => _loadingQuestions = true);
+    try {
+      final allQuestions = <Map<String, dynamic>>[];
+      for (final mod in _modules) {
+        final qSnap = await FirebaseFirestore.instance
+            .collection('tracks')
+            .doc(_selectedTrackId)
+            .collection('modules')
+            .doc(mod['id'] as String)
+            .collection('questions')
+            .get();
+        for (final qDoc in qSnap.docs) {
+          allQuestions.add({
+            'id': qDoc.id,
+            'moduleId': mod['id'],
+            'moduleTitle': mod['title'] ?? mod['id'],
+            ...qDoc.data(),
+          });
+        }
+      }
       setState(() {
-        _questions = snap.docs
-            .map((d) => {'id': d.id, ...d.data()})
-            .toList();
+        _questions = allQuestions;
         _loadingQuestions = false;
       });
     } catch (e) {
       setState(() => _loadingQuestions = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -1098,13 +1765,12 @@ class _QuestionsTabState extends State<_QuestionsTab> {
 
   Future<void> _saveQuestion() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedTopicId == null) return;
+    if (_selectedModuleId == null) return;
     setState(() => _saving = true);
     try {
       final data = <String, dynamic>{
         'question': _questionCtrl.text.trim(),
-        'options':
-            _optionCtrls.map((c) => c.text.trim()).toList(),
+        'options': _optionCtrls.map((c) => c.text.trim()).toList(),
         'correctIndex': _correctIndex,
         'level': _selectedLevel,
       };
@@ -1122,27 +1788,27 @@ class _QuestionsTabState extends State<_QuestionsTab> {
 
       final docId = _docIdCtrl.text.trim().isNotEmpty
           ? _docIdCtrl.text.trim()
-          : '${_selectedTopicId}_Q${DateTime.now().millisecondsSinceEpoch}';
+          : '${_selectedModuleId}_Q${DateTime.now().millisecondsSinceEpoch}';
 
       await FirebaseFirestore.instance
-          .collection('topics')
-          .doc(_selectedTopicId)
+          .collection('tracks')
+          .doc(_selectedTrackId)
+          .collection('modules')
+          .doc(_selectedModuleId)
           .collection('questions')
           .doc(docId)
           .set(data);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Question saved.')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Question saved.')));
         _closeForm();
-        _loadQuestions();
+        _loadAllQuestionsForTrack();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -1150,9 +1816,7 @@ class _QuestionsTabState extends State<_QuestionsTab> {
   }
 
   List<Map<String, dynamic>> get _filteredQuestions =>
-      _questions
-          .where((q) => q['level'] == _selectedLevel)
-          .toList();
+      _questions.where((q) => q['level'] == _selectedLevel).toList();
 
   @override
   Widget build(BuildContext context) {
@@ -1163,10 +1827,11 @@ class _QuestionsTabState extends State<_QuestionsTab> {
   Widget _buildListView() {
     return Column(
       children: [
-        // Track + Topic selectors
         Container(
           padding: EdgeInsets.symmetric(
-              horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
+          ),
           color: AppColors.surfaceContainer,
           child: Column(
             children: [
@@ -1176,315 +1841,198 @@ class _QuestionsTabState extends State<_QuestionsTab> {
                   SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: Container(
-                      padding: EdgeInsets.symmetric(
-                          horizontal: AppSpacing.sm),
+                      padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
                       decoration: BoxDecoration(
                         color: AppColors.surfaceContainerHigh,
                         borderRadius: AppRadius.radiusMd,
-                        border: Border.all(
-                            color: AppColors.outlineVariant),
+                        border: Border.all(color: AppColors.outlineVariant),
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
-                          value: _selectedTrack,
+                          value: _selectedTrackId,
                           isExpanded: true,
-                          dropdownColor:
-                              AppColors.surfaceContainerHigh,
-                          items: _kTracks.keys
-                              .map((t) => DropdownMenuItem(
-                                    value: t,
-                                    child: Row(
-                                      children: [
-                                        Container(
-                                          width: 12.r,
-                                          height: 12.r,
-                                          decoration:
-                                              BoxDecoration(
-                                            color: Color(
-                                                _kTracks[t]!),
-                                            shape:
-                                                BoxShape.circle,
+                          dropdownColor: AppColors.surfaceContainerHigh,
+                          items: _tracks
+                              .map(
+                                (t) => DropdownMenuItem(
+                                  value: t['id'] as String,
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 12.r,
+                                        height: 12.r,
+                                        decoration: BoxDecoration(
+                                          color: Color(
+                                            t['color'] ?? 0xFF888888,
                                           ),
+                                          shape: BoxShape.circle,
                                         ),
-                                        SizedBox(
-                                            width: AppSpacing
-                                                .sm),
-                                        Text(t),
-                                      ],
-                                    ),
-                                  ))
+                                      ),
+                                      SizedBox(width: AppSpacing.sm),
+                                      Text(t['name'] ?? t['id']),
+                                    ],
+                                  ),
+                                ),
+                              )
                               .toList(),
                           onChanged: (v) {
-                            setState(() =>
-                                _selectedTrack = v ?? 'KOTLIN');
-                            _loadTopicsForTrack();
+                            setState(
+                              () => _selectedTrackId = v ?? _selectedTrackId,
+                            );
+                            _loadModules();
                           },
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              SizedBox(height: AppSpacing.xs),
-              Row(
-                children: [
-                  _SectionLabel('TOPIC'),
-                  SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: _loadingTopics
-                        ? const Center(
-                            child: SizedBox(
-                              height: 20,
-                              width: 20,
-                              child:
-                                  CircularProgressIndicator(
-                                      strokeWidth: 2),
-                            ),
-                          )
-                        : Container(
-                            padding: EdgeInsets.symmetric(
-                                horizontal: AppSpacing.sm),
-                            decoration: BoxDecoration(
-                              color: AppColors
-                                  .surfaceContainerHigh,
-                              borderRadius:
-                                  AppRadius.radiusMd,
-                              border: Border.all(
-                                  color: AppColors
-                                      .outlineVariant),
-                            ),
-                            child:
-                                DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                                value: _selectedTopicId,
-                                isExpanded: true,
-                                dropdownColor: AppColors
-                                    .surfaceContainerHigh,
-                                hint: Text(
-                                  'Select a topic',
-                                  style: TextStyle(
-                                      color: AppColors
-                                          .onSurfaceVariant),
-                                ),
-                                items: _topics
-                                    .map((t) =>
-                                        DropdownMenuItem<String>(
-                                          value: t['id'] as String,
-                                          child: Text(
-                                              t['title'] as String? ??
-                                                  t['id'] as String),
-                                        ))
-                                    .toList(),
-                                onChanged: (v) {
-                                  setState(() =>
-                                      _selectedTopicId =
-                                          v);
-                                  _loadQuestions();
-                                },
-                              ),
-                            ),
-                          ),
                   ),
                 ],
               ),
             ],
           ),
         ),
-        // Level filter chips
-        if (_selectedTopicId != null)
-          Container(
-            padding: EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: AppSpacing.xs),
-            child: Row(
-              children: [
-                for (final level in _kLevels)
-                  Padding(
-                    padding: EdgeInsets.only(
-                        right: AppSpacing.xs),
-                    child: ChoiceChip(
-                      label: Text(level),
-                      selected:
-                          _selectedLevel == level,
-                      onSelected: (_) => setState(
-                          () => _selectedLevel = level),
-                      selectedColor:
-                          AppColors.primaryContainer,
-                      labelStyle:
-                          AppTypography.codeSm.copyWith(
-                        color: _selectedLevel == level
-                            ? AppColors
-                                .onPrimaryContainer
-                            : AppColors.onSurfaceVariant,
-                      ),
-                      side: BorderSide(
-                        color:
-                            _selectedLevel == level
-                                ? AppColors.primary
-                                : AppColors.outlineVariant,
-                      ),
+        Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.xs,
+          ),
+          child: Row(
+            children: [
+              for (final level in _kLevels)
+                Padding(
+                  padding: EdgeInsets.only(right: AppSpacing.xs),
+                  child: ChoiceChip(
+                    label: Text(level),
+                    selected: _selectedLevel == level,
+                    onSelected: (_) => setState(() => _selectedLevel = level),
+                    selectedColor: AppColors.primaryContainer,
+                    labelStyle: AppTypography.codeSm.copyWith(
+                      color: _selectedLevel == level
+                          ? AppColors.onPrimaryContainer
+                          : AppColors.onSurfaceVariant,
+                    ),
+                    side: BorderSide(
+                      color: _selectedLevel == level
+                          ? AppColors.primary
+                          : AppColors.outlineVariant,
                     ),
                   ),
-              ],
-            ),
+                ),
+            ],
           ),
-        // Questions list
+        ),
         Expanded(
-          child: _selectedTopicId == null
+          child: _loadingTracks || _loadingModules || _loadingQuestions
+              ? const Center(child: CircularProgressIndicator())
+              : _filteredQuestions.isEmpty
               ? Center(
                   child: Text(
-                    'Select a topic to see questions.',
+                    'No $_selectedLevel questions in this track.',
                     style: AppTypography.bodyMd.copyWith(
                       color: AppColors.onSurfaceVariant,
                     ),
                   ),
                 )
-              : _loadingQuestions
-                  ? const Center(
-                      child: CircularProgressIndicator())
-                  : _filteredQuestions.isEmpty
-                      ? Center(
-                          child: Text(
-                            'No $_selectedLevel questions yet.',
-                            style: AppTypography.bodyMd
-                                .copyWith(
-                              color: AppColors
-                                  .onSurfaceVariant,
-                            ),
-                          ),
-                        )
-                      : ListView.separated(
-                          padding:
-                              EdgeInsets.all(AppSpacing.md),
-                          itemCount:
-                              _filteredQuestions.length,
-                          separatorBuilder: (_, __) =>
-                              SizedBox(
-                                  height: AppSpacing.sm),
-                          itemBuilder: (context, i) {
-                            final q =
-                                _filteredQuestions[i];
-                            return Container(
-                              padding:
-                                  EdgeInsets.all(
-                                      AppSpacing.sm),
-                              decoration: BoxDecoration(
-                                color: AppColors
-                                    .surfaceContainer,
-                                borderRadius:
-                                    AppRadius.radiusMd,
-                                border: Border.all(
-                                    color: AppColors
-                                        .outlineVariant),
-                              ),
-                              child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment
-                                        .start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: EdgeInsets.symmetric(
-                                            horizontal:
-                                                6.r,
-                                            vertical:
-                                                2.r),
-                                        decoration:
-                                            BoxDecoration(
-                                          color: AppColors
-                                              .primaryContainer,
-                                          borderRadius:
-                                              AppRadius
-                                                  .radiusSm,
-                                        ),
-                                        child: Text(
-                                          q['level'] ??
-                                              '?',
-                                          style: AppTypography
-                                              .codeSm
-                                              .copyWith(
-                                            color: AppColors
-                                                .onPrimaryContainer,
-                                            fontSize:
-                                                9.sp,
-                                          ),
-                                        ),
-                                      ),
-                                      SizedBox(
-                                          width: AppSpacing
-                                              .xs),
-                                      Expanded(
-                                        child: Text(
-                                          q['question'] ??
-                                              '',
-                                          style: AppTypography
-                                              .bodyMd
-                                              .copyWith(
-                                            color: AppColors
-                                                .onSurface,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
+              : ListView.separated(
+                  padding: EdgeInsets.all(AppSpacing.md),
+                  itemCount: _filteredQuestions.length,
+                  separatorBuilder: (_, __) => SizedBox(height: AppSpacing.sm),
+                  itemBuilder: (context, i) {
+                    final q = _filteredQuestions[i];
+                    return Container(
+                      padding: EdgeInsets.all(AppSpacing.sm),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceContainer,
+                        borderRadius: AppRadius.radiusMd,
+                        border: Border.all(color: AppColors.outlineVariant),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 6.r,
+                                  vertical: 2.r,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primaryContainer,
+                                  borderRadius: AppRadius.radiusSm,
+                                ),
+                                child: Text(
+                                  q['level'] ?? '?',
+                                  style: AppTypography.codeSm.copyWith(
+                                    color: AppColors.onPrimaryContainer,
+                                    fontSize: 9.sp,
                                   ),
-                                  if ((q['codeLanguage'] ??
-                                          '')
-                                      .toString()
-                                      .isNotEmpty) ...[
-                                    SizedBox(
-                                        height: AppSpacing
-                                            .xs),
-                                    Container(
-                                      padding:
-                                          EdgeInsets.all(
-                                              6.r),
-                                      decoration:
-                                          BoxDecoration(
-                                        color: AppColors
-                                            .surfaceContainerHigh,
-                                        borderRadius:
-                                            AppRadius
-                                                .radiusSm,
-                                      ),
-                                      child: Row(
-                                        mainAxisSize:
-                                            MainAxisSize
-                                                .min,
-                                        children: [
-                                          Icon(
-                                              Icons
-                                                  .code,
-                                              size:
-                                                  12.r,
-                                              color: AppColors
-                                                  .primary),
-                                          SizedBox(
-                                              width:
-                                                  4.r),
-                                          Text(
-                                            '${q['codeLanguage']} • ${q['codeLines']?.length ?? 0} lines',
-                                            style: AppTypography
-                                                .codeSm
-                                                .copyWith(
-                                              color: AppColors
-                                                  .primary,
-                                              fontSize:
-                                                  10.sp,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
+                                ),
+                              ),
+                              SizedBox(width: AppSpacing.xs),
+                              Container(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 6.r,
+                                  vertical: 2.r,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surfaceContainerHigh,
+                                  borderRadius: AppRadius.radiusSm,
+                                ),
+                                child: Text(
+                                  q['moduleTitle'] ?? '',
+                                  style: AppTypography.codeSm.copyWith(
+                                    color: AppColors.onSurfaceVariant,
+                                    fontSize: 9.sp,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(width: AppSpacing.xs),
+                              Expanded(
+                                child: Text(
+                                  q['question'] ?? '',
+                                  style: AppTypography.bodyMd.copyWith(
+                                    color: AppColors.onSurface,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if ((q['codeLanguage'] ?? '')
+                              .toString()
+                              .isNotEmpty) ...[
+                            SizedBox(height: AppSpacing.xs),
+                            Container(
+                              padding: EdgeInsets.all(6.r),
+                              decoration: BoxDecoration(
+                                color: AppColors.surfaceContainerHigh,
+                                borderRadius: AppRadius.radiusSm,
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.code,
+                                    size: 12.r,
+                                    color: AppColors.primary,
+                                  ),
+                                  SizedBox(width: 4.r),
+                                  Text(
+                                    '${q['codeLanguage']} \u2022 ${q['codeLines']?.length ?? 0} lines',
+                                    style: AppTypography.codeSm.copyWith(
+                                      color: AppColors.primary,
+                                      fontSize: 10.sp,
                                     ),
-                                  ],
+                                  ),
                                 ],
                               ),
-                            );
-                          },
-                        ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    );
+                  },
+                ),
         ),
-        // Add button
-        if (_selectedTopicId != null)
+        if (_modules.isNotEmpty)
           SafeArea(
             child: Padding(
               padding: EdgeInsets.all(AppSpacing.md),
@@ -1497,8 +2045,7 @@ class _QuestionsTabState extends State<_QuestionsTab> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: AppColors.onPrimary,
-                    padding: EdgeInsets.symmetric(
-                        vertical: 14.r),
+                    padding: EdgeInsets.symmetric(vertical: 14.r),
                     shape: RoundedRectangleBorder(
                       borderRadius: AppRadius.radiusMd,
                     ),
@@ -1516,21 +2063,21 @@ class _QuestionsTabState extends State<_QuestionsTab> {
       children: [
         Container(
           padding: EdgeInsets.symmetric(
-              horizontal: AppSpacing.md,
-              vertical: AppSpacing.sm),
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
+          ),
           color: AppColors.surfaceContainer,
           child: Row(
             children: [
               IconButton(
                 onPressed: _closeForm,
-                icon: const Icon(
-                    Icons.arrow_back_rounded),
+                icon: const Icon(Icons.arrow_back_rounded),
                 color: AppColors.onSurface,
               ),
               SizedBox(width: AppSpacing.xs),
               Expanded(
                 child: Text(
-                  'New Question — $_selectedTrack',
+                  'New Question — $_selectedTrackId',
                   style: AppTypography.bodyLg.copyWith(
                     color: AppColors.onSurface,
                     fontWeight: FontWeight.w600,
@@ -1546,52 +2093,69 @@ class _QuestionsTabState extends State<_QuestionsTab> {
             child: Form(
               key: _formKey,
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.stretch,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _SectionLabel('LEVEL'),
+                  _SectionLabel('MODULE'),
                   SizedBox(height: AppSpacing.xs),
                   Container(
-                    padding: EdgeInsets.symmetric(
-                        horizontal: AppSpacing.sm),
+                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
                     decoration: BoxDecoration(
-                      color:
-                          AppColors.surfaceContainer,
-                      borderRadius:
-                          AppRadius.radiusMd,
-                      border: Border.all(
-                          color: AppColors
-                              .outlineVariant),
+                      color: AppColors.surfaceContainer,
+                      borderRadius: AppRadius.radiusMd,
+                      border: Border.all(color: AppColors.outlineVariant),
                     ),
-                    child:
-                        DropdownButtonHideUnderline(
+                    child: DropdownButtonHideUnderline(
                       child: DropdownButton<String>(
-                        value: _selectedLevel,
+                        value: _selectedModuleId,
                         isExpanded: true,
-                        dropdownColor: AppColors
-                            .surfaceContainerHigh,
-                        items: _kLevels
-                            .map((l) =>
-                                DropdownMenuItem(
-                                  value: l,
-                                  child: Text(l),
-                                ))
+                        dropdownColor: AppColors.surfaceContainerHigh,
+                        hint: Text(
+                          'Select a module',
+                          style: TextStyle(color: AppColors.onSurfaceVariant),
+                        ),
+                        items: _modules
+                            .map(
+                              (m) => DropdownMenuItem<String>(
+                                value: m['id'] as String,
+                                child: Text(
+                                  m['title'] as String? ?? m['id'] as String,
+                                ),
+                              ),
+                            )
                             .toList(),
-                        onChanged: (v) => setState(
-                            () => _selectedLevel =
-                                v ?? 'BEGINNER'),
+                        onChanged: (v) => setState(() => _selectedModuleId = v),
                       ),
                     ),
                   ),
                   SizedBox(height: AppSpacing.md),
-                  _SectionLabel(
-                      'DOCUMENT ID (auto if empty)'),
+                  _SectionLabel('LEVEL'),
                   SizedBox(height: AppSpacing.xs),
-                  _Field(
-                    controller: _docIdCtrl,
-                    hint:
-                        'e.g. KTN_COR_Q0',
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceContainer,
+                      borderRadius: AppRadius.radiusMd,
+                      border: Border.all(color: AppColors.outlineVariant),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _selectedLevel,
+                        isExpanded: true,
+                        dropdownColor: AppColors.surfaceContainerHigh,
+                        items: _kLevels
+                            .map(
+                              (l) => DropdownMenuItem(value: l, child: Text(l)),
+                            )
+                            .toList(),
+                        onChanged: (v) =>
+                            setState(() => _selectedLevel = v ?? 'BEGINNER'),
+                      ),
+                    ),
                   ),
+                  SizedBox(height: AppSpacing.md),
+                  _SectionLabel('DOCUMENT ID (auto if empty)'),
+                  SizedBox(height: AppSpacing.xs),
+                  _Field(controller: _docIdCtrl, hint: 'e.g. KTN_COR_Q0'),
                   SizedBox(height: AppSpacing.md),
                   _SectionLabel('QUESTION'),
                   SizedBox(height: AppSpacing.xs),
@@ -1599,131 +2163,91 @@ class _QuestionsTabState extends State<_QuestionsTab> {
                     controller: _questionCtrl,
                     hint: 'Question text',
                     maxLines: 3,
-                    validator: (v) => v == null ||
-                            v.isEmpty
-                        ? 'Required'
-                        : null,
+                    validator: (v) =>
+                        v == null || v.isEmpty ? 'Required' : null,
                   ),
                   SizedBox(height: AppSpacing.md),
                   _SectionLabel('OPTIONS'),
                   SizedBox(height: AppSpacing.xs),
                   for (var i = 0; i < 4; i++)
                     Padding(
-                      padding: EdgeInsets.only(
-                          bottom: AppSpacing.xs),
+                      padding: EdgeInsets.only(bottom: AppSpacing.xs),
                       child: Row(
                         children: [
                           Radio<int>(
                             value: i,
-                            groupValue:
-                                _correctIndex,
+                            groupValue: _correctIndex,
                             onChanged: (v) =>
-                                setState(() =>
-                                    _correctIndex =
-                                        v ?? 0),
-                            activeColor:
-                                AppColors.primary,
+                                setState(() => _correctIndex = v ?? 0),
+                            activeColor: AppColors.primary,
                             materialTapTargetSize:
-                                MaterialTapTargetSize
-                                    .shrinkWrap,
+                                MaterialTapTargetSize.shrinkWrap,
                           ),
                           Expanded(
                             child: _Field(
-                              controller:
-                                  _optionCtrls[i],
-                              hint:
-                                  'Option ${i + 1}',
+                              controller: _optionCtrls[i],
+                              hint: 'Option ${i + 1}',
                               validator: (v) =>
-                                  v == null ||
-                                          v.isEmpty
-                                      ? 'Required'
-                                      : null,
+                                  v == null || v.isEmpty ? 'Required' : null,
                             ),
                           ),
                         ],
                       ),
                     ),
-                  SizedBox(
-                      height: AppSpacing.sm),
+                  SizedBox(height: AppSpacing.sm),
                   Text(
                     'Correct answer: option ${_correctIndex + 1}',
-                    style: AppTypography.codeSm
-                        .copyWith(
-                      color:
-                          AppColors.primary,
+                    style: AppTypography.codeSm.copyWith(
+                      color: AppColors.primary,
                     ),
                   ),
-                  SizedBox(
-                      height: AppSpacing.md),
+                  SizedBox(height: AppSpacing.md),
                   Row(
                     children: [
-                      _SectionLabel(
-                          'CODE SNIPPET'),
+                      _SectionLabel('CODE SNIPPET'),
                       const Spacer(),
                       Switch(
                         value: _includeCode,
-                        onChanged: (v) =>
-                            setState(() =>
-                                _includeCode = v),
-                        activeColor:
-                            AppColors.primary,
+                        onChanged: (v) => setState(() => _includeCode = v),
+                        activeColor: AppColors.primary,
                       ),
                     ],
                   ),
                   if (_includeCode) ...[
-                    SizedBox(
-                        height: AppSpacing.xs),
+                    SizedBox(height: AppSpacing.xs),
                     _Field(
-                      controller:
-                          _codeHeaderCtrl,
-                      hint:
-                          'Header (e.g. [DATA_SYNC])',
+                      controller: _codeHeaderCtrl,
+                      hint: 'Header (e.g. [DATA_SYNC])',
                     ),
-                    SizedBox(
-                        height: AppSpacing.xs),
+                    SizedBox(height: AppSpacing.xs),
+                    _Field(controller: _codeLangCtrl, hint: 'Language'),
+                    SizedBox(height: AppSpacing.xs),
                     _Field(
-                      controller: _codeLangCtrl,
-                      hint: 'Language',
-                    ),
-                    SizedBox(
-                        height: AppSpacing.xs),
-                    _Field(
-                      controller:
-                          _codeLinesCtrl,
-                      hint:
-                          'Code lines (one per line)',
+                      controller: _codeLinesCtrl,
+                      hint: 'Code lines (one per line)',
                       maxLines: 6,
                     ),
                   ],
-                  SizedBox(
-                      height: AppSpacing.lg),
+                  SizedBox(height: AppSpacing.lg),
                   ElevatedButton(
-                    onPressed:
-                        _saving ? null : _saveQuestion,
-                    style: ElevatedButton
-                        .styleFrom(
-                      backgroundColor:
-                          AppColors.primary,
-                      foregroundColor:
-                          AppColors.onPrimary,
-                      padding: EdgeInsets.symmetric(
-                          vertical: 14.r),
-                      shape:
-                          RoundedRectangleBorder(
-                        borderRadius:
-                            AppRadius.radiusMd,
+                    onPressed: _saving ? null : _saveQuestion,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: AppColors.onPrimary,
+                      padding: EdgeInsets.symmetric(vertical: 14.r),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: AppRadius.radiusMd,
                       ),
                     ),
                     child: _saving
                         ? SizedBox(
                             height: 20.r,
                             width: 20.r,
-                            child:
-                                const CircularProgressIndicator(
-                                    strokeWidth: 2),
+                            child: const CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
                           )
-                        : const Text(
-                            'Save Question'),
+                        : const Text('Save Question'),
                   ),
                 ],
               ),
@@ -1736,434 +2260,510 @@ class _QuestionsTabState extends State<_QuestionsTab> {
 }
 
 // =============================================================================
-// Progress Tab
+// Flipcards Tab — tracks/{id}/flipcards subcollection
 // =============================================================================
 
-class _ProgressTab extends StatefulWidget {
-  const _ProgressTab();
-
+class _FlipcardsTab extends StatefulWidget {
+  const _FlipcardsTab();
   @override
-  State<_ProgressTab> createState() => _ProgressTabState();
+  State<_FlipcardsTab> createState() => _FlipcardsTabState();
 }
 
-class _ProgressTabState extends State<_ProgressTab> {
+class _FlipcardsTabState extends State<_FlipcardsTab> {
+  String _selectedTrackId = 'KOTLIN';
+  List<Map<String, dynamic>> _tracks = [];
+  bool _loadingTracks = false;
+
   final _formKey = GlobalKey<FormState>();
-  final _streakCtrl = TextEditingController(text: '0');
-  final _sessionsCtrl = TextEditingController(text: '0');
-  final _readinessCtrl = TextEditingController(text: '0');
-  final _globalCtrl = TextEditingController(text: '0');
-  final _targetCtrl = TextEditingController(text: '0.90');
-  final _competencies = <_CompetencyEntry>[];
-  final _focusAreas = <_FocusAreaEntry>[];
+  final _titleCtrl = TextEditingController();
+  final _descCtrl = TextEditingController();
+  final _codeHeaderCtrl = TextEditingController();
+  final _codeLangCtrl = TextEditingController();
+  final _codeLinesCtrl = TextEditingController();
+  bool _includeCode = false;
   bool _saving = false;
+  bool _showForm = false;
+  String? _editingId;
+
+  List<Map<String, dynamic>> _flipcards = [];
+  bool _loadingCards = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTracks();
+  }
 
   @override
   void dispose() {
-    _streakCtrl.dispose();
-    _sessionsCtrl.dispose();
-    _readinessCtrl.dispose();
-    _globalCtrl.dispose();
-    _targetCtrl.dispose();
-    for (final c in _competencies) {
-      c.dispose();
-    }
-    for (final f in _focusAreas) {
-      f.dispose();
-    }
+    _titleCtrl.dispose();
+    _descCtrl.dispose();
+    _codeHeaderCtrl.dispose();
+    _codeLangCtrl.dispose();
+    _codeLinesCtrl.dispose();
     super.dispose();
   }
 
-  void _addCompetency() => setState(() => _competencies.add(_CompetencyEntry()));
-  void _removeCompetency(int i) {
-    setState(() {
-      _competencies[i].dispose();
-      _competencies.removeAt(i);
-    });
-  }
-
-  void _addFocusArea() => setState(() => _focusAreas.add(_FocusAreaEntry()));
-  void _removeFocusArea(int i) {
-    setState(() {
-      _focusAreas[i].dispose();
-      _focusAreas.removeAt(i);
-    });
-  }
-
-  Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No signed-in user.')),
-      );
-      return;
+  Future<void> _loadTracks() async {
+    setState(() => _loadingTracks = true);
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('tracks')
+          .orderBy('order')
+          .get();
+      _tracks = snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+      if (_tracks.isNotEmpty) {
+        _selectedTrackId = _tracks.first['id'] as String;
+      }
+      setState(() => _loadingTracks = false);
+      await _loadFlipcards();
+    } catch (e) {
+      setState(() => _loadingTracks = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
     }
+  }
+
+  Future<void> _loadFlipcards() async {
+    setState(() => _loadingCards = true);
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('tracks')
+          .doc(_selectedTrackId)
+          .collection('flipcards')
+          .get();
+      setState(() {
+        _flipcards = snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+        _loadingCards = false;
+      });
+    } catch (e) {
+      setState(() => _loadingCards = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
+  void _openAddForm() {
+    _titleCtrl.clear();
+    _descCtrl.clear();
+    _codeHeaderCtrl.clear();
+    _codeLangCtrl.clear();
+    _codeLinesCtrl.clear();
+    _includeCode = false;
+    _editingId = null;
+    setState(() => _showForm = true);
+  }
+
+  void _openEditForm(Map<String, dynamic> flipcard) {
+    _titleCtrl.text = flipcard['term'] ?? '';
+    _descCtrl.text = flipcard['definition'] ?? '';
+    _codeHeaderCtrl.text = flipcard['codeHeader'] ?? '';
+    _codeLangCtrl.text = flipcard['codeLanguage'] ?? '';
+    _codeLinesCtrl.text = ((flipcard['codeLines'] as List<dynamic>?) ?? [])
+        .join('\n');
+    _includeCode = (flipcard['codeHeader'] ?? '').toString().isNotEmpty;
+    _editingId = flipcard['id'];
+    setState(() => _showForm = true);
+  }
+
+  void _closeForm() {
+    setState(() {
+      _showForm = false;
+      _editingId = null;
+    });
+  }
+
+  Future<void> _saveFlipcard() async {
+    if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
-      final data = {
-        'summary': {
-          'currentStreakDays': int.tryParse(_streakCtrl.text) ?? 0,
-          'totalSessions': int.tryParse(_sessionsCtrl.text) ?? 0,
-          'readinessScore':
-              double.tryParse(_readinessCtrl.text) ?? 0,
-          'globalReadinessScore':
-              double.tryParse(_globalCtrl.text) ?? 0,
-          'targetScore':
-              double.tryParse(_targetCtrl.text) ?? 0,
-        },
-        'competencies': _competencies
-            .map((c) => {
-                  'trackId': c.trackIdCtrl.text.trim(),
-                  'score': int.tryParse(c.scoreCtrl.text) ?? 0,
-                  'level': c.levelCtrl.text.trim(),
-                })
-            .toList(),
-        'focusAreas': _focusAreas
-            .map((f) => {
-                  'title': f.titleCtrl.text.trim(),
-                  'percent': double.tryParse(f.percentCtrl.text) ?? 0,
-                  'critical': f.critical,
-                  'trend': f.trend,
-                  'trendLabel': f.labelCtrl.text.trim(),
-                })
-            .toList(),
+      final data = <String, dynamic>{
+        'term': _titleCtrl.text.trim(),
+        'definition': _descCtrl.text.trim(),
       };
 
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('progress')
-          .doc('overview')
-          .set(data);
+      if (_includeCode &&
+          _codeHeaderCtrl.text.isNotEmpty &&
+          _codeLangCtrl.text.isNotEmpty) {
+        data['codeHeader'] = _codeHeaderCtrl.text.trim();
+        data['codeLanguage'] = _codeLangCtrl.text.trim();
+        data['codeLines'] = _codeLinesCtrl.text
+            .split('\n')
+            .where((l) => l.isNotEmpty)
+            .toList();
+      }
+
+      final ref = FirebaseFirestore.instance
+          .collection('tracks')
+          .doc(_selectedTrackId)
+          .collection('flipcards');
+      if (_editingId != null) {
+        await ref.doc(_editingId).set(data, SetOptions(merge: true));
+      } else {
+        await ref.add(data);
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Progress saved.')),
+          SnackBar(
+            content: Text(
+              _editingId != null ? 'Flipcard updated.' : 'Flipcard saved.',
+            ),
+          ),
         );
+        _closeForm();
+        _loadFlipcards();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
+  Future<void> _deleteFlipcard(String id) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('tracks')
+          .doc(_selectedTrackId)
+          .collection('flipcards')
+          .doc(id)
+          .delete();
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Flipcard $id deleted.')));
+        _loadFlipcards();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(AppSpacing.md),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _SectionLabel('READINESS SUMMARY'),
-            SizedBox(height: AppSpacing.xs),
-            Row(
-              children: [
-                Expanded(
-                  child: _Field(
-                      controller: _streakCtrl,
-                      hint: 'Streak days',
-                      label: 'Streak'),
-                ),
-                SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: _Field(
-                      controller: _sessionsCtrl,
-                      hint: 'Sessions',
-                      label: 'Sessions'),
-                ),
-              ],
-            ),
-            SizedBox(height: AppSpacing.xs),
-            Row(
-              children: [
-                Expanded(
-                  child: _Field(
-                      controller: _readinessCtrl,
-                      hint: '0.0 - 1.0',
-                      label: 'Readiness'),
-                ),
-                SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: _Field(
-                      controller: _globalCtrl,
-                      hint: '0.0 - 1.0',
-                      label: 'Global'),
-                ),
-                SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: _Field(
-                      controller: _targetCtrl,
-                      hint: '0.0 - 1.0',
-                      label: 'Target'),
-                ),
-              ],
-            ),
-            SizedBox(height: AppSpacing.lg),
+    if (_showForm) return _buildFormView();
+    return _buildListView();
+  }
 
-            // Competencies
-            Row(
-              children: [
-                _SectionLabel('COMPETENCIES'),
-                const Spacer(),
-                TextButton.icon(
-                  onPressed: _addCompetency,
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Add'),
-                ),
-              ],
-            ),
-            for (var i = 0; i < _competencies.length; i++)
-              _CompetencyCard(
-                entry: _competencies[i],
-                index: i,
-                onRemove: () => _removeCompetency(i),
-              ),
-            SizedBox(height: AppSpacing.lg),
-
-            // Focus Areas
-            Row(
-              children: [
-                _SectionLabel('FOCUS AREAS'),
-                const Spacer(),
-                TextButton.icon(
-                  onPressed: _addFocusArea,
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Add'),
-                ),
-              ],
-            ),
-            for (var i = 0; i < _focusAreas.length; i++)
-              _FocusAreaCard(
-                entry: _focusAreas[i],
-                index: i,
-                onRemove: () => _removeFocusArea(i),
-              ),
-            SizedBox(height: AppSpacing.lg),
-
-            ElevatedButton(
-              onPressed: _saving ? null : _save,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: AppColors.onPrimary,
-                padding: EdgeInsets.symmetric(vertical: 14.r),
-                shape: RoundedRectangleBorder(
-                  borderRadius: AppRadius.radiusMd,
+  Widget _buildListView() {
+    return Column(
+      children: [
+        Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
+          ),
+          color: AppColors.surfaceContainer,
+          child: Row(
+            children: [
+              _SectionLabel('TRACK'),
+              SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceContainerHigh,
+                    borderRadius: AppRadius.radiusMd,
+                    border: Border.all(color: AppColors.outlineVariant),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _selectedTrackId,
+                      isExpanded: true,
+                      dropdownColor: AppColors.surfaceContainerHigh,
+                      items: _tracks
+                          .map(
+                            (t) => DropdownMenuItem(
+                              value: t['id'] as String,
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 12.r,
+                                    height: 12.r,
+                                    decoration: BoxDecoration(
+                                      color: Color(t['color'] ?? 0xFF888888),
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  SizedBox(width: AppSpacing.sm),
+                                  Text(t['name'] ?? t['id']),
+                                ],
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (v) {
+                        setState(
+                          () => _selectedTrackId = v ?? _selectedTrackId,
+                        );
+                        _loadFlipcards();
+                      },
+                    ),
+                  ),
                 ),
               ),
-              child: _saving
-                  ? SizedBox(
-                      height: 20.r,
-                      width: 20.r,
-                      child: const CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Save Progress'),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
-    );
-  }
-}
-
-class _CompetencyEntry {
-  final trackIdCtrl = TextEditingController();
-  final scoreCtrl = TextEditingController(text: '0');
-  final levelCtrl = TextEditingController();
-
-  void dispose() {
-    trackIdCtrl.dispose();
-    scoreCtrl.dispose();
-    levelCtrl.dispose();
-  }
-}
-
-class _CompetencyCard extends StatelessWidget {
-  const _CompetencyCard({
-    required this.entry,
-    required this.index,
-    required this.onRemove,
-  });
-
-  final _CompetencyEntry entry;
-  final int index;
-  final VoidCallback onRemove;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: EdgeInsets.only(bottom: AppSpacing.sm),
-      padding: EdgeInsets.all(AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainer,
-        borderRadius: AppRadius.radiusMd,
-        border: Border.all(color: AppColors.outlineVariant),
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Text(
-                'Competency ${index + 1}',
-                style: AppTypography.bodyMd.copyWith(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w600,
+        Expanded(
+          child: _loadingTracks || _loadingCards
+              ? const Center(child: CircularProgressIndicator())
+              : _flipcards.isEmpty
+              ? Center(
+                  child: Text(
+                    'No flipcards in this track.',
+                    style: AppTypography.bodyMd.copyWith(
+                      color: AppColors.onSurfaceVariant,
+                    ),
+                  ),
+                )
+              : ListView.separated(
+                  padding: EdgeInsets.all(AppSpacing.md),
+                  itemCount: _flipcards.length,
+                  separatorBuilder: (_, __) => SizedBox(height: AppSpacing.sm),
+                  itemBuilder: (context, i) {
+                    final fc = _flipcards[i];
+                    return Container(
+                      padding: EdgeInsets.all(AppSpacing.sm),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceContainer,
+                        borderRadius: AppRadius.radiusMd,
+                        border: Border.all(color: AppColors.outlineVariant),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  fc['term'] ?? '',
+                                  style: AppTypography.bodyMd.copyWith(
+                                    color: AppColors.onSurface,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(width: AppSpacing.sm),
+                              IconButton(
+                                onPressed: () => _openEditForm(fc),
+                                icon: const Icon(Icons.edit_rounded, size: 18),
+                                color: AppColors.primary,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                              ),
+                              SizedBox(width: AppSpacing.xs),
+                              IconButton(
+                                onPressed: () => _deleteFlipcard(fc['id']),
+                                icon: const Icon(
+                                  Icons.delete_rounded,
+                                  size: 18,
+                                ),
+                                color: AppColors.error,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                              ),
+                            ],
+                          ),
+                          if ((fc['definition'] ?? '')
+                              .toString()
+                              .isNotEmpty) ...[
+                            SizedBox(height: AppSpacing.xs),
+                            Text(
+                              fc['definition'],
+                              style: AppTypography.bodyMd.copyWith(
+                                color: AppColors.onSurfaceVariant,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                          if ((fc['codeLanguage'] ?? '')
+                              .toString()
+                              .isNotEmpty) ...[
+                            SizedBox(height: AppSpacing.xs),
+                            Container(
+                              padding: EdgeInsets.all(6.r),
+                              decoration: BoxDecoration(
+                                color: AppColors.surfaceContainerHigh,
+                                borderRadius: AppRadius.radiusSm,
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.code,
+                                    size: 12.r,
+                                    color: AppColors.primary,
+                                  ),
+                                  SizedBox(width: 4.r),
+                                  Text(
+                                    '${fc['codeLanguage']} \u2022 ${fc['codeLines']?.length ?? 0} lines',
+                                    style: AppTypography.codeSm.copyWith(
+                                      color: AppColors.primary,
+                                      fontSize: 10.sp,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    );
+                  },
+                ),
+        ),
+        SafeArea(
+          child: Padding(
+            padding: EdgeInsets.all(AppSpacing.md),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _openAddForm,
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Add Flipcard'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: AppColors.onPrimary,
+                  padding: EdgeInsets.symmetric(vertical: 14.r),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: AppRadius.radiusMd,
+                  ),
                 ),
               ),
-              const Spacer(),
-              IconButton(
-                onPressed: onRemove,
-                icon: const Icon(Icons.close_rounded, size: 18),
-                color: AppColors.error,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-              ),
-            ],
+            ),
           ),
-          SizedBox(height: AppSpacing.xs),
-          _Field(controller: entry.trackIdCtrl, hint: 'Track ID (e.g. kotlin)'),
-          SizedBox(height: AppSpacing.xs),
-          Row(
-            children: [
-              Expanded(
-                child: _Field(
-                    controller: entry.scoreCtrl, hint: 'Score (0-100)'),
-              ),
-              SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: _Field(
-                    controller: entry.levelCtrl, hint: 'Level'),
-              ),
-            ],
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
-}
 
-class _FocusAreaEntry {
-  final titleCtrl = TextEditingController();
-  final percentCtrl = TextEditingController(text: '0');
-  final labelCtrl = TextEditingController();
-  bool critical = false;
-  String trend = 'flat';
-
-  void dispose() {
-    titleCtrl.dispose();
-    percentCtrl.dispose();
-    labelCtrl.dispose();
-  }
-}
-
-class _FocusAreaCard extends StatelessWidget {
-  const _FocusAreaCard({
-    required this.entry,
-    required this.index,
-    required this.onRemove,
-  });
-
-  final _FocusAreaEntry entry;
-  final int index;
-  final VoidCallback onRemove;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: EdgeInsets.only(bottom: AppSpacing.sm),
-      padding: EdgeInsets.all(AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainer,
-        borderRadius: AppRadius.radiusMd,
-        border: Border.all(color: AppColors.outlineVariant),
-      ),
-      child: Column(
-        children: [
-          Row(
+  Widget _buildFormView() {
+    return Column(
+      children: [
+        Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
+          ),
+          color: AppColors.surfaceContainer,
+          child: Row(
             children: [
-              Text(
-                'Focus Area ${index + 1}',
-                style: AppTypography.bodyMd.copyWith(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w600,
+              IconButton(
+                onPressed: _closeForm,
+                icon: const Icon(Icons.arrow_back_rounded),
+                color: AppColors.onSurface,
+              ),
+              SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: Text(
+                  _editingId != null
+                      ? 'Edit Flipcard — $_selectedTrackId'
+                      : 'New Flipcard — $_selectedTrackId',
+                  style: AppTypography.bodyLg.copyWith(
+                    color: AppColors.onSurface,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
-              const Spacer(),
-              IconButton(
-                onPressed: onRemove,
-                icon: const Icon(Icons.close_rounded, size: 18),
-                color: AppColors.error,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-              ),
             ],
           ),
-          SizedBox(height: AppSpacing.xs),
-          _Field(controller: entry.titleCtrl, hint: 'Title'),
-          SizedBox(height: AppSpacing.xs),
-          Row(
-            children: [
-              Expanded(
-                child: _Field(
-                    controller: entry.percentCtrl,
-                    hint: 'Percent (0.0-1.0)'),
-              ),
-              SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: _Field(
-                    controller: entry.labelCtrl,
-                    hint: 'Trend label'),
-              ),
-            ],
-          ),
-          SizedBox(height: AppSpacing.xs),
-          Row(
-            children: [
-              Row(
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(AppSpacing.md),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _SectionLabel('CRITICAL'),
-                  SizedBox(width: AppSpacing.xs),
-                  Switch(
-                    value: entry.critical,
-                    onChanged: (v) {
-                      entry.critical = v;
-                      (context as Element).markNeedsBuild();
-                    },
-                    activeColor: AppColors.primary,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  _SectionLabel('TITLE (TERM)'),
+                  SizedBox(height: AppSpacing.xs),
+                  _Field(
+                    controller: _titleCtrl,
+                    hint: 'Front of the flashcard',
+                    validator: (v) =>
+                        v == null || v.isEmpty ? 'Required' : null,
+                  ),
+                  SizedBox(height: AppSpacing.md),
+                  _SectionLabel('DESCRIPTION (DEFINITION)'),
+                  SizedBox(height: AppSpacing.xs),
+                  _Field(
+                    controller: _descCtrl,
+                    hint: 'Back of the flashcard',
+                    maxLines: 5,
+                    validator: (v) =>
+                        v == null || v.isEmpty ? 'Required' : null,
+                  ),
+                  SizedBox(height: AppSpacing.md),
+                  Row(
+                    children: [
+                      _SectionLabel('CODE SNIPPET'),
+                      const Spacer(),
+                      Switch(
+                        value: _includeCode,
+                        onChanged: (v) => setState(() => _includeCode = v),
+                        activeColor: AppColors.primary,
+                      ),
+                    ],
+                  ),
+                  if (_includeCode) ...[
+                    SizedBox(height: AppSpacing.xs),
+                    _Field(
+                      controller: _codeHeaderCtrl,
+                      hint: 'Header (e.g. main.kt)',
+                    ),
+                    SizedBox(height: AppSpacing.xs),
+                    _Field(controller: _codeLangCtrl, hint: 'Language'),
+                    SizedBox(height: AppSpacing.xs),
+                    _Field(
+                      controller: _codeLinesCtrl,
+                      hint: 'Code lines (one per line)',
+                      maxLines: 6,
+                    ),
+                  ],
+                  SizedBox(height: AppSpacing.lg),
+                  ElevatedButton(
+                    onPressed: _saving ? null : _saveFlipcard,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: AppColors.onPrimary,
+                      padding: EdgeInsets.symmetric(vertical: 14.r),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: AppRadius.radiusMd,
+                      ),
+                    ),
+                    child: _saving
+                        ? SizedBox(
+                            height: 20.r,
+                            width: 20.r,
+                            child: const CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : Text(
+                            _editingId != null
+                                ? 'Update Flipcard'
+                                : 'Save Flipcard',
+                          ),
                   ),
                 ],
               ),
-              SizedBox(width: AppSpacing.md),
-              _SectionLabel('TREND'),
-              SizedBox(width: AppSpacing.xs),
-              DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: entry.trend,
-                  isDense: true,
-                  dropdownColor: AppColors.surfaceContainerHigh,
-                  items: const [
-                    DropdownMenuItem(value: 'up', child: Text('up')),
-                    DropdownMenuItem(value: 'flat', child: Text('flat')),
-                    DropdownMenuItem(
-                        value: 'levelUp', child: Text('levelUp')),
-                  ],
-                  onChanged: (v) {
-                    entry.trend = v ?? 'flat';
-                    (context as Element).markNeedsBuild();
-                  },
-                ),
-              ),
-            ],
+            ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -2198,9 +2798,8 @@ class _UserProfileTabState extends State<_UserProfileTab> {
     if (!_formKey.currentState!.validate()) return;
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No signed-in user.')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('No signed-in user.')));
       return;
     }
     setState(() => _saving = true);
@@ -2218,8 +2817,9 @@ class _UserProfileTabState extends State<_UserProfileTab> {
             : user.email,
         'displayName': user.displayName ?? '',
         'photoUrl': user.photoURL ?? '',
-        'authProvider':
-            user.providerData.isNotEmpty ? user.providerData[0].providerId : 'unknown',
+        'authProvider': user.providerData.isNotEmpty
+            ? user.providerData[0].providerId
+            : 'unknown',
         'tracks': tracks,
         'runtimeLevel': _runtimeLevelCtrl.text.trim(),
         'createdAt': FieldValue.serverTimestamp(),
@@ -2227,15 +2827,13 @@ class _UserProfileTabState extends State<_UserProfileTab> {
       }, SetOptions(merge: true));
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('User profile saved.')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('User profile saved.')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -2339,9 +2937,7 @@ class _UserProfileTabState extends State<_UserProfileTab> {
                 backgroundColor: AppColors.primary,
                 foregroundColor: AppColors.onPrimary,
                 padding: EdgeInsets.symmetric(vertical: 14.r),
-                shape: RoundedRectangleBorder(
-                  borderRadius: AppRadius.radiusMd,
-                ),
+                shape: RoundedRectangleBorder(borderRadius: AppRadius.radiusMd),
               ),
               child: _saving
                   ? SizedBox(

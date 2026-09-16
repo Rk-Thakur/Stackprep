@@ -1,6 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/error/failures.dart';
+import '../../../progress/domain/usecases/record_attempt.dart';
 import '../../domain/usecases/get_practice_questions.dart';
 import 'practice_session_event.dart';
 import 'practice_session_state.dart';
@@ -9,9 +10,12 @@ import 'practice_session_state.dart';
 /// final score handed to the summary screen.
 class PracticeSessionBloc
     extends Bloc<PracticeSessionEvent, PracticeSessionState> {
-  PracticeSessionBloc({required GetPracticeQuestions getPracticeQuestions})
-    : _getPracticeQuestions = getPracticeQuestions,
-      super(const PracticeSessionState()) {
+  PracticeSessionBloc({
+    required GetPracticeQuestions getPracticeQuestions,
+    required RecordAttempt recordAttempt,
+  }) : _getPracticeQuestions = getPracticeQuestions,
+       _recordAttempt = recordAttempt,
+       super(const PracticeSessionState()) {
     on<PracticeSessionStarted>(_onStarted);
     on<PracticeAnswerSelected>(_onAnswerSelected);
     on<PracticeAnswerChecked>(_onAnswerChecked);
@@ -20,6 +24,7 @@ class PracticeSessionBloc
   }
 
   final GetPracticeQuestions _getPracticeQuestions;
+  final RecordAttempt _recordAttempt;
 
   Future<void> _onStarted(
     PracticeSessionStarted event,
@@ -27,7 +32,10 @@ class PracticeSessionBloc
   ) async {
     emit(state.copyWith(status: PracticeSessionStatus.loading));
     final result = await _getPracticeQuestions(
-      GetPracticeQuestionsParams(topicCode: event.topicCode),
+      GetPracticeQuestionsParams(
+        topicCode: event.topicCode,
+        moduleId: event.moduleId,
+      ),
     );
     result.fold(
       (Failure failure) => emit(
@@ -44,6 +52,10 @@ class PracticeSessionBloc
           clearSelectedIndex: true,
           checked: false,
           correctCount: 0,
+          results: const [],
+          topicCode: event.topicCode,
+          moduleId: event.moduleId,
+          challenge: event.challenge,
         ),
       ),
     );
@@ -70,12 +82,28 @@ class PracticeSessionBloc
       state.copyWith(
         checked: true,
         correctCount: isCorrect ? state.correctCount + 1 : state.correctCount,
+        results: [
+          ...state.results,
+          QuestionResult(refId: question.refId, correct: isCorrect),
+        ],
       ),
     );
   }
 
-  void _advance(Emitter<PracticeSessionState> emit) {
+  Future<void> _advance(Emitter<PracticeSessionState> emit) async {
     if (state.isLastQuestion) {
+      final type = state.challenge
+          ? 'challenge'
+          : (state.moduleId == null ? 'mcq' : 'quiz');
+      await _recordAttempt(
+        RecordAttemptParams(
+          trackId: state.topicCode,
+          moduleId: state.moduleId,
+          type: type,
+          correct: state.correctCount,
+          total: state.totalQuestions,
+        ),
+      );
       emit(state.copyWith(completed: true));
       return;
     }
@@ -88,21 +116,21 @@ class PracticeSessionBloc
     );
   }
 
-  void _onQuestionSkipped(
+  Future<void> _onQuestionSkipped(
     PracticeQuestionSkipped event,
     Emitter<PracticeSessionState> emit,
-  ) {
+  ) async {
     if (!state.checked) {
-      _advance(emit);
+      await _advance(emit);
     }
   }
 
-  void _onNextRequested(
+  Future<void> _onNextRequested(
     PracticeNextRequested event,
     Emitter<PracticeSessionState> emit,
-  ) {
+  ) async {
     if (state.checked) {
-      _advance(emit);
+      await _advance(emit);
     }
   }
 }

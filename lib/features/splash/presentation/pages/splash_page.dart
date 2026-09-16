@@ -6,9 +6,11 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../auth/data/datasources/auth_remote_data_source.dart';
 import '../../../auth/presentation/pages/auth_page.dart';
 import '../../../home/presentation/pages/home_page.dart';
 import '../../../onboarding/data/datasources/onboarding_local_data_source.dart';
+import '../../../onboarding/presentation/pages/select_stack_page.dart';
 import '../widgets/boot_terminal.dart';
 import '../widgets/hero_mark.dart';
 import '../widgets/splash_background.dart';
@@ -54,11 +56,16 @@ class _SplashPageState extends State<SplashPage>
     super.initState();
     Future.delayed(const Duration(milliseconds: 4500), () {
       if (!mounted) return;
-      final onboardingCompleted =
-          sl<OnboardingLocalDataSource>().isOnboardingCompleted();
-      if (onboardingCompleted) {
+      final authenticated = sl<AuthRemoteDataSource>().currentUser != null;
+      if (authenticated) {
+        final onboardingCompleted =
+            sl<OnboardingLocalDataSource>().isOnboardingCompleted();
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomePage()),
+          MaterialPageRoute(
+            builder: (_) => onboardingCompleted
+                ? const HomePage()
+                : const SelectStackPage(),
+          ),
         );
       } else {
         setState(() => _canStart = true);

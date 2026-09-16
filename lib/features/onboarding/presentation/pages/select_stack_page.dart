@@ -13,7 +13,12 @@ import 'select_runtime_level_page.dart';
 
 /// Onboarding step 1: pick the mobile platforms to prep for.
 class SelectStackPage extends StatefulWidget {
-  const SelectStackPage({super.key});
+  const SelectStackPage({super.key, this.manageTracks = false});
+
+  /// When true, this page acts as a "manage tracks" screen reached from the
+  /// profile: existing selections are pre-filled and saving pops back instead
+  /// of advancing to the runtime-level step.
+  final bool manageTracks;
 
   @override
   State<SelectStackPage> createState() => _SelectStackPageState();
@@ -24,9 +29,19 @@ class _SelectStackPageState extends State<SelectStackPage> {
   void initState() {
     super.initState();
     context.read<OnboardingCubit>().loadCatalogs();
+    if (widget.manageTracks) {
+      context.read<OnboardingCubit>().restoreSelection();
+    }
   }
 
   void _toggle(String id) => context.read<OnboardingCubit>().toggleTrack(id);
+
+  Future<void> _saveAndClose() async {
+    final cubit = context.read<OnboardingCubit>();
+    await cubit.saveTrackSelection();
+    if (!mounted) return;
+    Navigator.of(context).pop();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -77,7 +92,9 @@ class _SelectStackPageState extends State<SelectStackPage> {
                     ),
                     SizedBox(height: AppSpacing.md),
                     Text(
-                      'Initialize Your Stack',
+                      widget.manageTracks
+                          ? 'Manage Your Stack'
+                          : 'Initialize Your Stack',
                       textAlign: TextAlign.center,
                       style: AppTypography.headlineLg.copyWith(
                         color: AppColors.onSurface,
@@ -85,8 +102,10 @@ class _SelectStackPageState extends State<SelectStackPage> {
                     ),
                     SizedBox(height: AppSpacing.sm),
                     Text(
-                      'Select the mobile platforms you want to master. '
-                      'You can add more later.',
+                      widget.manageTracks
+                          ? 'Update the mobile platforms you want to master.'
+                          : 'Select the mobile platforms you want to master. '
+                                'You can add more later.',
                       textAlign: TextAlign.center,
                       style: AppTypography.bodyLg.copyWith(
                         color: AppColors.onSurfaceVariant,
@@ -96,8 +115,7 @@ class _SelectStackPageState extends State<SelectStackPage> {
                     BlocBuilder<OnboardingCubit, OnboardingState>(
                       buildWhen: (previous, current) =>
                           previous.tracks != current.tracks ||
-                          previous.selectedTrackIds !=
-                              current.selectedTrackIds,
+                          previous.selectedTrackIds != current.selectedTrackIds,
                       builder: (context, state) {
                         return Column(
                           children: [
@@ -134,22 +152,26 @@ class _SelectStackPageState extends State<SelectStackPage> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   TextButton(
-                    onPressed: () {},
+                    onPressed: widget.manageTracks
+                        ? () => Navigator.of(context).pop()
+                        : () {},
                     child: Text(
-                      'SKIP FOR NOW',
+                      widget.manageTracks ? 'Cancel' : 'SKIP FOR NOW',
                       style: AppTypography.labelMono.copyWith(
                         color: AppColors.onSurfaceVariant,
                       ),
                     ),
                   ),
                   ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const SelectRuntimeLevelPage(),
-                        ),
-                      );
-                    },
+                    onPressed: widget.manageTracks
+                        ? _saveAndClose
+                        : () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const SelectRuntimeLevelPage(),
+                              ),
+                            );
+                          },
                     style: ElevatedButton.styleFrom(
                       padding: EdgeInsets.symmetric(
                         horizontal: AppSpacing.lg,
@@ -159,7 +181,7 @@ class _SelectStackPageState extends State<SelectStackPage> {
                         borderRadius: AppRadius.radiusMd,
                       ),
                     ),
-                    child: const Text('Continue'),
+                    child: Text(widget.manageTracks ? 'Save' : 'Continue'),
                   ),
                 ],
               ),

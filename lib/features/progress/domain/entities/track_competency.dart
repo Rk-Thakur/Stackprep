@@ -6,6 +6,8 @@ class TrackCompetency extends Equatable {
     required this.trackId,
     required this.score,
     required this.level,
+    this.modulesCompleted = 0,
+    this.modulesTotal = 0,
   });
 
   final String trackId;
@@ -14,6 +16,17 @@ class TrackCompetency extends Equatable {
   final int score;
   final String level;
 
+  /// How many of the track's modules the user has opened, and how many
+  /// exist in the catalog. `modulesTotal == 0` means unknown (not fetched).
+  final int modulesCompleted;
+  final int modulesTotal;
+
   @override
-  List<Object?> get props => [trackId, score, level];
+  List<Object?> get props => [
+    trackId,
+    score,
+    level,
+    modulesCompleted,
+    modulesTotal,
+  ];
 }

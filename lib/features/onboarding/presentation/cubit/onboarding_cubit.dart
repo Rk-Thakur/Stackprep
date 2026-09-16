@@ -54,6 +54,34 @@ class OnboardingCubit extends Cubit<OnboardingState> {
     emit(state.copyWith(selectedTrackIds: updated));
   }
 
+  /// Seeds the selection from what was previously persisted, so a user
+  /// returning to manage their tracks sees their current choices selected.
+  void restoreSelection() {
+    emit(
+      state.copyWith(
+        selectedTrackIds: Set<String>.from(_localDataSource.selectedTrackIds),
+        selectedLevelId: _localDataSource.selectedRuntimeLevel,
+      ),
+    );
+  }
+
+  /// Persists the current track selection while keeping the existing runtime
+  /// level intact. Used when a user manages their tracks from the profile
+  /// screen without re-running full onboarding.
+  Future<void> saveTrackSelection() async {
+    final levelId = _localDataSource.selectedRuntimeLevel;
+    await _localDataSource.saveSelections(
+      trackIds: state.selectedTrackIds.toList(),
+      runtimeLevelId: levelId,
+    );
+    await _syncProfileToRemote(
+      SyncProfileToRemoteParams(
+        trackIds: state.selectedTrackIds.toList(),
+        runtimeLevelId: levelId,
+      ),
+    );
+  }
+
   void selectLevel(String id) {
     emit(state.copyWith(selectedLevelId: id));
   }

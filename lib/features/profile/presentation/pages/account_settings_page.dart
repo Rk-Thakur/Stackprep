@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import '../../../../core/theme/app_colors.dart';
@@ -6,27 +7,77 @@ import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/app_bottom_nav_bar.dart';
+import '../../../../core/widgets/app_top_bar.dart';
+import '../../../../core/widgets/terminal_text_field.dart';
+import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../practice/presentation/pages/practice_page.dart';
 import '../../../progress/presentation/pages/progress_page.dart';
 
 /// Account Settings page, reached from the Profile tab.
-class AccountSettingsPage extends StatelessWidget {
+class AccountSettingsPage extends StatefulWidget {
   const AccountSettingsPage({super.key});
 
+  @override
+  State<AccountSettingsPage> createState() => _AccountSettingsPageState();
+}
+
+class _AccountSettingsPageState extends State<AccountSettingsPage> {
+  String? _username;
+
   void _comingSoon(BuildContext context, String feature) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('$feature coming soon.')));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('$feature coming soon.')));
+  }
+
+  String _resolveUsername(String displayName, String email) {
+    if (_username != null && _username!.isNotEmpty) return _username!;
+    if (displayName.isNotEmpty) return displayName;
+    return email.isEmpty ? 'Not set' : email;
+  }
+
+  Future<void> _editUsername(String current) async {
+    final controller = TextEditingController(text: current);
+
+    final saved = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => _EditUsernameDialog(controller: controller),
+    );
+    if (saved == null || saved.isEmpty) return;
+
+    setState(() => _username = saved);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Username updated.')));
   }
 
   @override
   Widget build(BuildContext context) {
+    final displayName =
+        context.select<AuthBloc, String?>((b) => b.state.user?.displayName) ??
+        '';
+    final email =
+        context.select<AuthBloc, String?>((b) => b.state.user?.email) ?? '';
+    final username = _resolveUsername(displayName, email);
+
     return Scaffold(
       body: SafeArea(
         bottom: false,
         child: Column(
           children: [
-            const _TopBar(),
+            AppTopBar(
+              trailing: InkWell(
+                onTap: () => Navigator.of(context).maybePop(),
+                borderRadius: AppRadius.radiusSm,
+                child: Padding(
+                  padding: EdgeInsets.all(4.r),
+                  child: Icon(
+                    Icons.arrow_back_rounded,
+                    size: 22.r,
+                    color: AppColors.onSurface,
+                  ),
+                ),
+              ),
+            ),
             Expanded(
               child: SingleChildScrollView(
                 padding: EdgeInsets.fromLTRB(
@@ -38,41 +89,6 @@ class AccountSettingsPage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const _SectionLabel('SECURITY'),
-                    SizedBox(height: AppSpacing.sm),
-                    _SettingsCard(
-                      rows: [
-                        _SettingsRow(
-                          icon: Icons.key_rounded,
-                          title: 'Change Password',
-                          trailing: const _Chevron(),
-                          onTap: () =>
-                              _comingSoon(context, 'Change Password'),
-                        ),
-                        _SettingsRow(
-                          icon: Icons.gpp_good_outlined,
-                          title: 'Two-Factor Authentication',
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const _StatusBadge('Enabled'),
-                              SizedBox(width: AppSpacing.xs),
-                              const _Chevron(),
-                            ],
-                          ),
-                          onTap: () =>
-                              _comingSoon(context, 'Two-Factor Authentication'),
-                        ),
-                        _SettingsRow(
-                          icon: Icons.devices_rounded,
-                          title: 'Active Sessions',
-                          trailing: const _Chevron(),
-                          onTap: () =>
-                              _comingSoon(context, 'Active Sessions'),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: AppSpacing.lg),
                     const _SectionLabel('PROFILE CUSTOMIZATION'),
                     SizedBox(height: AppSpacing.sm),
                     _SettingsCard(
@@ -80,13 +96,13 @@ class AccountSettingsPage extends StatelessWidget {
                         _SettingsRow(
                           icon: Icons.badge_outlined,
                           title: 'Edit Username',
-                          subtitle: '@dev_ops_ninja',
+                          subtitle: username,
                           trailing: Icon(
                             Icons.edit_rounded,
                             size: 18.r,
                             color: AppColors.primary,
                           ),
-                          onTap: () => _comingSoon(context, 'Edit Username'),
+                          onTap: () => _editUsername(username),
                         ),
                         _SettingsRow(
                           icon: Icons.account_circle_outlined,
@@ -99,9 +115,7 @@ class AccountSettingsPage extends StatelessWidget {
                               color: AppColors.surfaceContainerHigh,
                               borderRadius: AppRadius.radiusSm,
                               border: Border.all(
-                                color: AppColors.primary.withValues(
-                                  alpha: 0.5,
-                                ),
+                                color: AppColors.primary.withValues(alpha: 0.5),
                               ),
                             ),
                             child: Icon(
@@ -123,8 +137,7 @@ class AccountSettingsPage extends StatelessWidget {
                               _PlainChip('Swift'),
                             ],
                           ),
-                          onTap: () =>
-                              _comingSoon(context, 'Technical Stack'),
+                          onTap: () => _comingSoon(context, 'Technical Stack'),
                         ),
                       ],
                     ),
@@ -170,15 +183,16 @@ class AccountSettingsPage extends StatelessWidget {
                       ),
                     ),
                     SizedBox(height: AppSpacing.sm),
-                    Container(height: 1, color: AppColors.error.withValues(alpha: 0.3)),
+                    Container(
+                      height: 1,
+                      color: AppColors.error.withValues(alpha: 0.3),
+                    ),
                     SizedBox(height: AppSpacing.md),
                     Container(
                       width: double.infinity,
                       padding: EdgeInsets.all(AppSpacing.md),
                       decoration: BoxDecoration(
-                        color: AppColors.errorContainer.withValues(
-                          alpha: 0.12,
-                        ),
+                        color: AppColors.errorContainer.withValues(alpha: 0.12),
                         borderRadius: AppRadius.radiusLg,
                         border: Border.all(
                           color: AppColors.error.withValues(alpha: 0.4),
@@ -204,13 +218,9 @@ class AccountSettingsPage extends StatelessWidget {
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: AppColors.error,
                                 side: BorderSide(
-                                  color: AppColors.error.withValues(
-                                    alpha: 0.5,
-                                  ),
+                                  color: AppColors.error.withValues(alpha: 0.5),
                                 ),
-                                padding: EdgeInsets.symmetric(
-                                  vertical: 12.r,
-                                ),
+                                padding: EdgeInsets.symmetric(vertical: 12.r),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: AppRadius.radiusMd,
                                 ),
@@ -239,54 +249,10 @@ class AccountSettingsPage extends StatelessWidget {
                   );
                   return;
                 }
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const ProgressPage()),
-                );
+                Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const ProgressPage()));
               },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TopBar extends StatelessWidget {
-  const _TopBar();
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.outlineVariant)),
-      ),
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.margin,
-          vertical: AppSpacing.md,
-        ),
-        child: Row(
-          children: [
-            InkWell(
-              onTap: () => Navigator.of(context).maybePop(),
-              borderRadius: AppRadius.radiusSm,
-              child: Padding(
-                padding: EdgeInsets.all(4.r),
-                child: Icon(
-                  Icons.arrow_back_rounded,
-                  size: 24.r,
-                  color: AppColors.onSurface,
-                ),
-              ),
-            ),
-            SizedBox(width: AppSpacing.sm),
-            Text(
-              'Account Settings',
-              style: AppTypography.headlineMd.copyWith(
-                color: AppColors.onSurface,
-                fontSize: 24.sp,
-                fontWeight: FontWeight.w800,
-              ),
             ),
           ],
         ),
@@ -420,30 +386,6 @@ class _Chevron extends StatelessWidget {
   }
 }
 
-class _StatusBadge extends StatelessWidget {
-  const _StatusBadge(this.label);
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 8.r, vertical: 4.r),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceContainerHigh,
-        borderRadius: AppRadius.radiusSm,
-      ),
-      child: Text(
-        label,
-        style: AppTypography.labelMono.copyWith(
-          color: AppColors.primary,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
 class _PlainChip extends StatelessWidget {
   const _PlainChip(this.label);
 
@@ -549,6 +491,72 @@ class _DashedDivider extends StatelessWidget {
           }),
         );
       },
+    );
+  }
+}
+
+class _EditUsernameDialog extends StatelessWidget {
+  const _EditUsernameDialog({required this.controller});
+
+  final TextEditingController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: AppColors.surfaceContainer,
+      shape: RoundedRectangleBorder(
+        borderRadius: AppRadius.radiusLg,
+        side: const BorderSide(color: AppColors.outlineVariant),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'EDIT USERNAME',
+              style: AppTypography.labelMono.copyWith(color: AppColors.primary),
+            ),
+            SizedBox(height: AppSpacing.sm),
+            Text(
+              'Update the name shown on your profile.',
+              style: AppTypography.bodyMd.copyWith(
+                color: AppColors.onSurfaceVariant,
+              ),
+            ),
+            SizedBox(height: AppSpacing.lg),
+            TerminalTextField(
+              controller: controller,
+              icon: Icons.badge_outlined,
+              hintText: 'Enter username',
+            ),
+            SizedBox(height: AppSpacing.lg),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                SizedBox(width: AppSpacing.sm),
+                ElevatedButton(
+                  onPressed: () =>
+                      Navigator.of(context).pop(controller.text.trim()),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryContainer,
+                    foregroundColor: AppColors.onPrimaryContainer,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: AppRadius.radiusMd,
+                    ),
+                  ),
+                  child: const Text('Save'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

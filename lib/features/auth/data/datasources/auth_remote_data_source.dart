@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:google_sign_in/google_sign_in.dart';
 
@@ -22,10 +23,14 @@ abstract interface class AuthRemoteDataSource {
 }
 
 class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
-  AuthRemoteDataSourceImpl({fb.FirebaseAuth? firebaseAuth})
-    : _firebaseAuth = firebaseAuth ?? fb.FirebaseAuth.instance;
+  AuthRemoteDataSourceImpl({
+    fb.FirebaseAuth? firebaseAuth,
+    FirebaseFirestore? firestore,
+  }) : _firebaseAuth = firebaseAuth ?? fb.FirebaseAuth.instance,
+       _firestore = firestore ?? FirebaseFirestore.instance;
 
   final fb.FirebaseAuth _firebaseAuth;
+  final FirebaseFirestore _firestore;
   Future<void>? _googleSignInInit;
 
   @override
@@ -48,7 +53,9 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         email: email,
         password: password,
       );
-      return credential.user!;
+      final user = credential.user!;
+      await _pushUserToFirestore(user);
+      return user;
     } on fb.FirebaseAuthException catch (e) {
       throw ServerException(_messageForCode(e.code));
     }
@@ -64,7 +71,9 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         email: email,
         password: password,
       );
-      return credential.user!;
+      final user = credential.user!;
+      await _pushUserToFirestore(user);
+      return user;
     } on fb.FirebaseAuthException catch (e) {
       throw ServerException(_messageForCode(e.code));
     }
@@ -85,7 +94,11 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       final userCredential = await _firebaseAuth.signInWithCredential(
         credential,
       );
-      return userCredential.user;
+      final user = userCredential.user;
+      if (user != null) {
+        await _pushUserToFirestore(user);
+      }
+      return user;
     } on GoogleSignInException catch (e) {
       if (e.code == GoogleSignInExceptionCode.canceled) return null;
       throw ServerException('Google sign-in failed: ${e.description ?? e.code}');
@@ -99,6 +112,33 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     await _firebaseAuth.signOut();
     if (_googleSignInInit != null) {
       await GoogleSignIn.instance.signOut();
+    }
+  }
+
+  /// Upserts the base `users/{uid}` profile whenever a user signs up or signs
+  /// in, so the account exists in Firestore even before onboarding fills in
+  /// the tracks/runtime level (which the onboarding write merges on top).
+  ///
+  /// Never throws: a failed profile write shouldn't fail the authentication
+  /// itself — the user is still signed in.
+  Future<void> _pushUserToFirestore(fb.User user) async {
+    try {
+      final data = <String, dynamic>{
+        'userId': user.uid,
+        'userEmail': user.email,
+        'displayName': user.displayName ?? '',
+        'photoUrl': user.photoURL ?? '',
+        'authProvider': user.providerData.isNotEmpty
+            ? user.providerData[0].providerId
+            : 'unknown',
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+      await _firestore.collection('users').doc(user.uid).set(
+        data,
+        SetOptions(merge: true),
+      );
+    } on FirebaseException {
+      // Deliberately swallow — auth still succeeded.
     }
   }
 

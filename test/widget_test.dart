@@ -80,7 +80,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('ENGINEER_NOTEBOOK_INIT'), findsOneWidget);
+    expect(find.text('STACKPREP'), findsOneWidget);
     expect(find.text('USER_IDENTIFIER (Email)'), findsOneWidget);
     expect(find.text('AUTH_TOKEN (Password)'), findsOneWidget);
     expect(find.text('SIGN_IN'), findsOneWidget);

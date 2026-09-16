@@ -43,17 +43,26 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final SignInWithGoogle _signInWithGoogle;
   final SignOut _signOut;
 
+  /// True while an account is being created. Firebase auto-authenticates a
+  /// brand-new user the moment the account is created, which would otherwise
+  /// bounce the user straight past the login form. We hold that off and sign
+  /// the fresh user back out so they must explicitly sign in.
+  bool _creatingAccount = false;
+
   late final StreamSubscription<AppUser?> _userSubscription;
 
   void _onUserChanged(AuthUserChanged event, Emitter<AuthState> emit) {
+    final loggedIn = event.user != null && !_creatingAccount;
     emit(
       state.copyWith(
-        status: event.user != null
+        status: loggedIn
             ? AuthStatus.authenticated
             : AuthStatus.unauthenticated,
-        user: event.user,
-        clearUser: event.user == null,
+        user: loggedIn ? event.user : null,
+        clearUser: event.user == null || _creatingAccount,
         formStatus: AuthFormStatus.idle,
+        // A real sign-in clears the "please sign in now" notice.
+        justSignedUp: loggedIn ? false : null,
       ),
     );
   }
@@ -63,7 +72,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     Emitter<AuthState> emit,
   ) async {
     emit(
-      state.copyWith(formStatus: AuthFormStatus.submitting, clearError: true),
+      state.copyWith(
+        formStatus: AuthFormStatus.submitting,
+        clearError: true,
+        // A real sign-in attempt clears the post-signup "sign in now" notice
+        // so it can't resurface on the login path (e.g. masking an error).
+        justSignedUp: false,
+      ),
     );
     final result = await _signInWithEmail(
       SignInEmailParams(email: event.email, password: event.password),
@@ -77,15 +92,37 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     AuthSignUpRequested event,
     Emitter<AuthState> emit,
   ) async {
+    _creatingAccount = true;
     emit(
       state.copyWith(formStatus: AuthFormStatus.submitting, clearError: true),
     );
     final result = await _signUpWithEmail(
       SignUpEmailParams(email: event.email, password: event.password),
     );
-    result.fold(_failureEmitter(emit), (_) {
-      emit(state.copyWith(formStatus: AuthFormStatus.idle));
-    });
+    await result.fold<Future<void>>(
+      (failure) async {
+        _creatingAccount = false;
+        emit(
+          state.copyWith(
+            formStatus: AuthFormStatus.failure,
+            errorMessage: failure.message,
+          ),
+        );
+      },
+      (_) async {
+        // Account created. Sign the auto-authenticated session out so the
+        // user has to sign in with a matching email/password before the app
+        // proceeds from the sign-in form.
+        await _signOut(const NoParams());
+        _creatingAccount = false;
+        emit(
+          state.copyWith(
+            formStatus: AuthFormStatus.idle,
+            justSignedUp: true,
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _onGoogleSignInRequested(

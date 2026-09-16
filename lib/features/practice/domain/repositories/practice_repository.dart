@@ -7,5 +7,6 @@ import '../entities/practice_question.dart';
 abstract interface class PracticeRepository {
   Future<Either<Failure, List<PracticeQuestion>>> getQuestions({
     required String topicCode,
+    String? moduleId,
   });
 }

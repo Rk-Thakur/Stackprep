@@ -9,6 +9,7 @@ class ReadinessSummary extends Equatable {
     required this.readinessScore,
     required this.globalReadinessScore,
     required this.targetScore,
+    this.activityLevels = const [],
   });
 
   final int currentStreakDays;
@@ -19,6 +20,10 @@ class ReadinessSummary extends Equatable {
   final double globalReadinessScore;
   final double targetScore;
 
+  /// One entry per day, oldest first, bucketed 0 (none) to 4 (most active).
+  /// Backs the activity heatmap on the progress tab.
+  final List<int> activityLevels;
+
   @override
   List<Object?> get props => [
     currentStreakDays,
@@ -26,5 +31,6 @@ class ReadinessSummary extends Equatable {
     readinessScore,
     globalReadinessScore,
     targetScore,
+    activityLevels,
   ];
 }

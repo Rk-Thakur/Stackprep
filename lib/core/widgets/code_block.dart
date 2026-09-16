@@ -106,14 +106,6 @@ class CodeBlock extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                Text(
-                  language,
-                  style: AppTypography.labelMono.copyWith(
-                    color: AppColors.onSurfaceVariant,
-                    fontSize: 11.sp,
-                  ),
-                ),
-                SizedBox(width: AppSpacing.sm),
                 InkWell(
                   onTap: () => _copy(context),
                   borderRadius: AppRadius.radiusSm,
@@ -121,6 +113,14 @@ class CodeBlock extends StatelessWidget {
                     Icons.copy_rounded,
                     size: 15.r,
                     color: AppColors.onSurfaceVariant,
+                  ),
+                ),
+                SizedBox(width: AppSpacing.sm),
+                Text(
+                  language,
+                  style: AppTypography.labelMono.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                    fontSize: 11.sp,
                   ),
                 ),
               ],

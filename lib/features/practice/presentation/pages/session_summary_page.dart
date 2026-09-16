@@ -5,6 +5,8 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/widgets/app_top_bar.dart';
+import '../bloc/practice_session_state.dart';
 import 'practice_session_page.dart';
 
 class _CategoryBreakdown {
@@ -18,46 +20,92 @@ class _CategoryBreakdown {
   final int correct;
   final int incorrect;
 
-  int get percent => ((correct / (correct + incorrect)) * 100).round();
+  int get percent {
+    final total = correct + incorrect;
+    return total == 0 ? 0 : ((correct / total) * 100).round();
+  }
 }
 
-const List<_CategoryBreakdown> _kBreakdown = [
-  _CategoryBreakdown(title: 'Core Knowledge', correct: 17, incorrect: 3),
-  _CategoryBreakdown(title: 'Logic Reasoning', correct: 12, incorrect: 8),
-  _CategoryBreakdown(title: 'Practical Skills', correct: 20, incorrect: 0),
-];
-
 class _LogLine {
-  const _LogLine(this.timestamp, this.event, this.status);
+  const _LogLine(this.event, this.status);
 
-  final String timestamp;
   final String event;
   final String status;
 }
 
-const List<_LogLine> _kLogLines = [
-  _LogLine('09:00:01', 'SESSION_START: ID_A841_X', ''),
-  _LogLine('09:02:14', 'Q1_SUBMIT:', 'SUCCESS (244ms)'),
-  _LogLine('09:05:48', 'Q2_SUBMIT:', 'SUCCESS (132ms)'),
-  _LogLine('09:07:02', 'Q3_SUBMIT:', 'SUCCESS (198ms)'),
-  _LogLine('09:09:15', 'Q4_SUBMIT:', 'SUCCESS (176ms)'),
-  _LogLine('09:11:30', 'SESSION_END:', 'SUCCESS'),
-];
-
-/// Shown once a practice session finishes — the final score, a category
-/// breakdown, and a terminal-style session log.
+/// Shown once a practice session finishes — the final score, a breakdown of
+/// how each question went, and a terminal-style session log.
 class SessionSummaryPage extends StatelessWidget {
   const SessionSummaryPage({
     super.key,
     required this.correctCount,
     required this.totalQuestions,
+    this.results = const [],
+    this.topicCode = '',
+    this.moduleId,
   });
 
   final int correctCount;
   final int totalQuestions;
+  final List<QuestionResult> results;
+  final String topicCode;
+  final String? moduleId;
 
   int get _percent =>
       totalQuestions == 0 ? 0 : ((correctCount / totalQuestions) * 100).round();
+
+  /// Real breakdown derived from the session. Each row is independent:
+  /// "Correct" shows the share of answered questions that were right;
+  /// "Missed" shows the opposite; "Skipped" appears only when some
+  /// questions were left unanswered.
+  List<_CategoryBreakdown> get _breakdown {
+    final answered = results.length;
+    final incorrect = answered - correctCount;
+    final skipped = totalQuestions - answered;
+    return [
+      _CategoryBreakdown(
+        title: 'Correct',
+        correct: correctCount,
+        incorrect: incorrect + skipped,
+      ),
+      _CategoryBreakdown(
+        title: 'Missed',
+        correct: incorrect,
+        incorrect: correctCount + skipped,
+      ),
+      if (skipped > 0)
+        _CategoryBreakdown(
+          title: 'Skipped',
+          correct: skipped,
+          incorrect: answered,
+        ),
+    ];
+  }
+
+  List<_LogLine> get _logLines {
+    final lines = <_LogLine>[
+      _LogLine(
+        'SESSION_START: ${topicCode.isEmpty ? 'TRACK' : topicCode}',
+        'OK',
+      ),
+    ];
+    for (var i = 0; i < results.length; i++) {
+      final q = results[i];
+      lines.add(
+        _LogLine(
+          'Q${i + 1}_SUBMIT: ${q.refId}',
+          q.correct ? 'CORRECT' : 'WRONG',
+        ),
+      );
+    }
+    if (results.length < totalQuestions) {
+      lines.add(
+        _LogLine('Q_SKIPPED:', '${totalQuestions - results.length}'),
+      );
+    }
+    lines.add(_LogLine('SESSION_END: ${'$_percent%'}', 'SUCCESS'));
+    return lines;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -65,7 +113,25 @@ class SessionSummaryPage extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            const _TopBar(),
+            AppTopBar(
+              trailing: Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: 4.r,
+                ),
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppColors.outlineVariant),
+                  borderRadius: AppRadius.radiusSm,
+                ),
+                child: Text(
+                  '[SYSTEM.STATUS: OK]',
+                  style: AppTypography.labelMono.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                    fontSize: 10.sp,
+                  ),
+                ),
+              ),
+            ),
             Expanded(
               child: SingleChildScrollView(
                 padding: EdgeInsets.fromLTRB(
@@ -134,7 +200,7 @@ class SessionSummaryPage extends StatelessWidget {
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        'Breakdown by Category',
+                        'Breakdown',
                         style: AppTypography.headlineMd.copyWith(
                           color: AppColors.onSurface,
                           fontSize: 19.sp,
@@ -142,14 +208,14 @@ class SessionSummaryPage extends StatelessWidget {
                       ),
                     ),
                     SizedBox(height: AppSpacing.md),
-                    for (var i = 0; i < _kBreakdown.length; i++)
+                    for (var i = 0; i < _breakdown.length; i++)
                       Padding(
                         padding: EdgeInsets.only(
-                          bottom: i == _kBreakdown.length - 1
+                          bottom: i == _breakdown.length - 1
                               ? 0
                               : AppSpacing.sm,
                         ),
-                        child: _CategoryCard(breakdown: _kBreakdown[i]),
+                        child: _CategoryCard(breakdown: _breakdown[i]),
                       ),
                     SizedBox(height: AppSpacing.xl),
                     Align(
@@ -163,7 +229,7 @@ class SessionSummaryPage extends StatelessWidget {
                       ),
                     ),
                     SizedBox(height: AppSpacing.md),
-                    const _SessionLogBox(),
+                    _SessionLogBox(lines: _logLines),
                   ],
                 ),
               ),
@@ -182,7 +248,10 @@ class SessionSummaryPage extends StatelessWidget {
                     child: OutlinedButton.icon(
                       onPressed: () => Navigator.of(context).pushReplacement(
                         MaterialPageRoute(
-                          builder: (_) => const PracticeSessionPage(),
+                          builder: (_) => PracticeSessionPage(
+                            topicCode: topicCode,
+                            moduleId: moduleId,
+                          ),
                         ),
                       ),
                       icon: Icon(Icons.refresh_rounded, size: 18.r),
@@ -217,68 +286,6 @@ class SessionSummaryPage extends StatelessWidget {
                     ),
                   ),
                 ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TopBar extends StatelessWidget {
-  const _TopBar();
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.outlineVariant)),
-      ),
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.margin,
-          vertical: AppSpacing.sm,
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: EdgeInsets.all(4.r),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.15),
-                borderRadius: AppRadius.radiusSm,
-              ),
-              child: Icon(
-                Icons.terminal_rounded,
-                size: 16.r,
-                color: AppColors.primary,
-              ),
-            ),
-            SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Text(
-                'StackPrep',
-                style: AppTypography.labelMono.copyWith(
-                  color: AppColors.onSurface,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: AppSpacing.sm,
-                vertical: 4.r,
-              ),
-              decoration: BoxDecoration(
-                border: Border.all(color: AppColors.outlineVariant),
-                borderRadius: AppRadius.radiusSm,
-              ),
-              child: Text(
-                '[SYSTEM.STATUS: OK]',
-                style: AppTypography.labelMono.copyWith(
-                  color: AppColors.onSurfaceVariant,
-                  fontSize: 10.sp,
-                ),
               ),
             ),
           ],
@@ -358,7 +365,9 @@ class _CategoryCard extends StatelessWidget {
 }
 
 class _SessionLogBox extends StatelessWidget {
-  const _SessionLogBox();
+  const _SessionLogBox({required this.lines});
+
+  final List<_LogLine> lines;
 
   @override
   Widget build(BuildContext context) {
@@ -373,19 +382,12 @@ class _SessionLogBox extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (final line in _kLogLines)
+          for (final line in lines)
             Padding(
               padding: EdgeInsets.only(bottom: 4.r),
               child: Text.rich(
                 TextSpan(
                   children: [
-                    TextSpan(
-                      text: '[${line.timestamp}] ',
-                      style: AppTypography.codeSm.copyWith(
-                        color: AppColors.codeLineNumber,
-                        fontSize: 12.sp,
-                      ),
-                    ),
                     TextSpan(
                       text: '${line.event} ',
                       style: AppTypography.codeSm.copyWith(
@@ -393,14 +395,13 @@ class _SessionLogBox extends StatelessWidget {
                         fontSize: 12.sp,
                       ),
                     ),
-                    if (line.status.isNotEmpty)
-                      TextSpan(
-                        text: line.status,
-                        style: AppTypography.codeSm.copyWith(
-                          color: AppColors.primary,
-                          fontSize: 12.sp,
-                        ),
+                    TextSpan(
+                      text: line.status,
+                      style: AppTypography.codeSm.copyWith(
+                        color: AppColors.primary,
+                        fontSize: 12.sp,
                       ),
+                    ),
                   ],
                 ),
               ),

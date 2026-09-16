@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:skeletonizer/skeletonizer.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/router/route_observer.dart';
 import '../../../../core/widgets/activity_heatmap.dart';
 import '../../../../core/widgets/app_bottom_nav_bar.dart';
 import '../../../../core/widgets/app_top_bar.dart';
+import '../../../../core/widgets/track_icon.dart';
 import '../../../../injection_container.dart';
 import '../../../onboarding/domain/entities/stack_track.dart';
 import '../../../practice/presentation/pages/practice_page.dart';
 import '../../../profile/presentation/pages/profile_page.dart';
+import '../../../topics/presentation/pages/module_detail_page.dart';
 import '../../domain/entities/focus_area.dart';
 import '../../domain/entities/readiness_summary.dart';
 import '../../domain/entities/track_competency.dart';
@@ -25,6 +29,22 @@ IconData _trendIcon(TrendDirection trend) => switch (trend) {
   TrendDirection.levelUp => Icons.auto_awesome_rounded,
 };
 
+/// Resolves a competency's track against the catalog, tolerating unknown or
+/// differently-cased ids (e.g. "KOTLIN" vs "kotlin") that can come from
+/// locally-cached progress data.
+StackTrack _trackFor(String trackId, List<StackTrack> tracks) {
+  return tracks.firstWhere(
+    (t) => t.id.toLowerCase() == trackId.toLowerCase(),
+    orElse: () => StackTrack(
+      id: trackId,
+      name: trackId.toUpperCase(),
+      category: 'TRACK',
+      shape: TrackShapeType.roundedSquare,
+      color: AppColors.primary,
+    ),
+  );
+}
+
 /// Progress tab: activity commitment, an aggregate readiness score, a
 /// filterable per-track competency breakdown, and weak-area telemetry.
 class ProgressPage extends StatelessWidget {
@@ -33,11 +53,46 @@ class ProgressPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (_) =>
-          sl<ProgressCubit>()..load(),
-      child: const _ProgressView(),
+      create: (_) => sl<ProgressCubit>()..load(),
+      child: const _ProgressLifecycle(child: _ProgressView()),
     );
   }
+}
+
+/// Reloads the [ProgressCubit] whenever the progress page becomes visible
+/// again after a nested route (module/topic) pops back.
+class _ProgressLifecycle extends StatefulWidget {
+  const _ProgressLifecycle({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_ProgressLifecycle> createState() => _ProgressLifecycleState();
+}
+
+class _ProgressLifecycleState extends State<_ProgressLifecycle>
+    with RouteAware {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    routeObserver.subscribe(this, ModalRoute.of(context)!);
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  @override
+  void didPopNext() {
+    // Reload progress (competencies, focus areas, streak) after returning
+    // from a nested module/topic so the indicators stay fresh.
+    if (mounted) context.read<ProgressCubit>().load();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 class _ProgressView extends StatelessWidget {
@@ -62,7 +117,7 @@ class _ProgressView extends StatelessWidget {
                 builder: (context, state) {
                   if (state.status == ProgressStatus.loading &&
                       state.summary == null) {
-                    return const Center(child: CircularProgressIndicator());
+                    return const _ProgressSkeleton();
                   }
                   if (state.status == ProgressStatus.failure &&
                       state.summary == null) {
@@ -129,58 +184,71 @@ class _ProgressView extends StatelessWidget {
                               builder: (context) {
                                 final competency =
                                     state.filteredCompetencies[i];
-                                final track = state.tracks.firstWhere(
-                                  (t) => t.id == competency.trackId,
+                                final track = _trackFor(
+                                  competency.trackId,
+                                  state.tracks,
                                 );
-                                return _CompetencyCard(
-                                  track: track,
-                                  competency: competency,
+                                return _RevealOnScroll(
+                                  key: ValueKey(
+                                    '${state.selectedTrackId ?? 'all'}-$i',
+                                  ),
+                                  builder: (context, visible) =>
+                                      _CompetencyCard(
+                                        track: track,
+                                        competency: competency,
+                                        animate: visible,
+                                      ),
                                 );
                               },
                             ),
                           ),
                         SizedBox(height: AppSpacing.lg),
-                        Row(
-                          children: [
-                            const Expanded(child: _SectionTitle('Focus Areas')),
-                            OutlinedButton.icon(
-                              onPressed: () =>
-                                  _comingSoon(context, 'Add focus area'),
-                              icon: Icon(Icons.add_rounded, size: 16.r),
-                              label: const Text('Focus Area'),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: AppColors.primary,
-                                side: const BorderSide(
-                                  color: AppColors.outlineVariant,
-                                ),
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: AppSpacing.sm,
-                                  vertical: 8.r,
-                                ),
-                                textStyle: AppTypography.labelMono,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: AppRadius.radiusSm,
-                                ),
-                              ),
-                            ),
-                          ],
+                        const _SectionTitle('Focus Areas'),
+                        SizedBox(height: 2.r),
+                        Text(
+                          'Auto-detected from your lowest-scoring modules.',
+                          style: AppTypography.bodyMd.copyWith(
+                            color: AppColors.onSurfaceVariant,
+                          ),
                         ),
                         SizedBox(height: AppSpacing.md),
-                        for (var i = 0; i < state.focusAreas.length; i++)
-                          Padding(
-                            padding: EdgeInsets.only(
-                              bottom: i == state.focusAreas.length - 1
-                                  ? 0
-                                  : AppSpacing.sm,
+                        if (state.focusAreas.isEmpty)
+                          Text(
+                            'Nothing flagged yet — keep practicing modules '
+                            'and weak spots will show up here.',
+                            style: AppTypography.bodyMd.copyWith(
+                              color: AppColors.onSurfaceVariant,
                             ),
-                            child: _FocusAreaCard(
-                              area: state.focusAreas[i],
-                              onTap: () => _comingSoon(
-                                context,
-                                state.focusAreas[i].title,
+                          )
+                        else
+                          for (var i = 0; i < state.focusAreas.length; i++)
+                            Padding(
+                              padding: EdgeInsets.only(
+                                bottom: i == state.focusAreas.length - 1
+                                    ? 0
+                                    : AppSpacing.sm,
+                              ),
+                              child: _FocusAreaCard(
+                                area: state.focusAreas[i],
+                                onTap: () {
+                                  final area = state.focusAreas[i];
+                                  final trackId = area.trackId;
+                                  final moduleId = area.moduleId;
+                                  if (trackId == null || moduleId == null) {
+                                    _comingSoon(context, area.title);
+                                    return;
+                                  }
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => ModuleDetailPage(
+                                        trackId: trackId,
+                                        moduleId: moduleId,
+                                      ),
+                                    ),
+                                  );
+                                },
                               ),
                             ),
-                          ),
                       ],
                     ),
                   );
@@ -206,6 +274,157 @@ class _ProgressView extends StatelessWidget {
                 );
               },
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Shimmering placeholder matching the progress tab's overall layout while
+/// the first `progress/overview` fetch is still in flight.
+class _ProgressSkeleton extends StatelessWidget {
+  const _ProgressSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Skeletonizer(
+      enabled: true,
+      child: SingleChildScrollView(
+        physics: const NeverScrollableScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.margin,
+          AppSpacing.md,
+          AppSpacing.margin,
+          AppSpacing.xl,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _ProgressCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Commitment Engine',
+                    style: AppTypography.headlineMd.copyWith(
+                      color: AppColors.onSurface,
+                      fontSize: 21.sp,
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.md),
+                  Container(
+                    width: double.infinity,
+                    height: 70.r,
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceContainerHigh,
+                      borderRadius: AppRadius.radiusSm,
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.md),
+                  Container(height: 1, color: AppColors.outlineVariant),
+                  SizedBox(height: AppSpacing.md),
+                  Row(
+                    children: [
+                      for (var i = 0; i < 3; i++)
+                        Expanded(
+                          child: Padding(
+                            padding: EdgeInsets.only(right: i == 2 ? 0 : 8.r),
+                            child: Container(
+                              height: 36.r,
+                              decoration: BoxDecoration(
+                                color: AppColors.surfaceContainerHigh,
+                                borderRadius: AppRadius.radiusSm,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: AppSpacing.md),
+            _ProgressCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'SYSTEM MASTERY',
+                    style: AppTypography.labelMono.copyWith(
+                      color: AppColors.onSurfaceVariant,
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.lg),
+                  Container(
+                    width: 120.r,
+                    height: 40.r,
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceContainerHigh,
+                      borderRadius: AppRadius.radiusSm,
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.sm),
+                  Container(
+                    width: double.infinity,
+                    height: 8.r,
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceContainerHigh,
+                      borderRadius: AppRadius.radiusFull,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: AppSpacing.lg),
+            const _SectionTitle('Core Competencies'),
+            SizedBox(height: AppSpacing.md),
+            Row(
+              children: [
+                for (var i = 0; i < 3; i++)
+                  Padding(
+                    padding: EdgeInsets.only(right: AppSpacing.xs),
+                    child: Container(
+                      width: 72.r,
+                      height: 36.r,
+                      decoration: BoxDecoration(
+                        borderRadius: AppRadius.radiusFull,
+                        border: Border.all(color: AppColors.outlineVariant),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            SizedBox(height: AppSpacing.md),
+            for (var i = 0; i < 2; i++)
+              Padding(
+                padding: EdgeInsets.only(
+                  bottom: i == 1 ? 0 : AppSpacing.md,
+                ),
+                child: _ProgressCard(
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 96.r,
+                        height: 96.r,
+                        decoration: const BoxDecoration(
+                          color: AppColors.surfaceContainerHigh,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      SizedBox(height: AppSpacing.sm),
+                      Text(
+                        'Track name',
+                        style: AppTypography.bodyLg.copyWith(
+                          color: AppColors.onSurface,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 18.sp,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -311,7 +530,13 @@ class _CommitmentEngineCard extends StatelessWidget {
             ],
           ),
           SizedBox(height: AppSpacing.md),
-          const ActivityHeatmap(days: 91, columns: 13, seed: 42),
+          ActivityHeatmap(
+            days: summary.activityLevels.isNotEmpty
+                ? summary.activityLevels.length
+                : 91,
+            columns: 13,
+            levels: summary.activityLevels,
+          ),
           SizedBox(height: AppSpacing.md),
           Container(height: 1, color: AppColors.outlineVariant),
           SizedBox(height: AppSpacing.md),
@@ -514,60 +739,219 @@ class _TrackFilterChip extends StatelessWidget {
   }
 }
 
-class _CompetencyCard extends StatelessWidget {
-  const _CompetencyCard({required this.track, required this.competency});
+class _RevealOnScroll extends StatefulWidget {
+  const _RevealOnScroll({super.key, required this.builder});
+
+  final Widget Function(BuildContext context, bool visible) builder;
+
+  @override
+  State<_RevealOnScroll> createState() => _RevealOnScrollState();
+}
+
+class _RevealOnScrollState extends State<_RevealOnScroll>
+    with SingleTickerProviderStateMixin {
+  bool _visible = false;
+  ScrollPosition? _position;
+
+  late final AnimationController _fade = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 350),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _attach());
+  }
+
+  void _attach() {
+    if (!mounted) return;
+    final position = Scrollable.of(context).position;
+    _position = position;
+    position.addListener(_checkVisibility);
+    _checkVisibility();
+  }
+
+  Future<void> _checkVisibility() async {
+    if (!mounted || _visible) return;
+    // Wait a frame so layout is settled before measuring.
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    final renderObject = context.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) return;
+    final scrollable = Scrollable.of(context);
+    final geometry = scrollable.context.findRenderObject() as RenderBox?;
+    if (geometry == null || !geometry.hasSize) return;
+    final top = renderObject.localToGlobal(
+      Offset.zero,
+      ancestor: geometry,
+    ).dy;
+    final bottom = top + renderObject.size.height;
+    if (top < geometry.size.height && bottom > 0) {
+      setState(() {
+        _visible = true;
+        _fade.forward();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _position?.removeListener(_checkVisibility);
+    _fade.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _fade,
+      child: widget.builder(context, _visible),
+    );
+  }
+}
+
+class _CompetencyCard extends StatefulWidget {
+  const _CompetencyCard({
+    required this.track,
+    required this.competency,
+    required this.animate,
+  });
 
   final StackTrack track;
   final TrackCompetency competency;
 
+  /// Whether the card is currently on screen. The entrance/progress animation
+  /// only plays once the card becomes visible.
+  final bool animate;
+
+  @override
+  State<_CompetencyCard> createState() => _CompetencyCardState();
+}
+
+class _CompetencyCardState extends State<_CompetencyCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1100),
+  );
+  bool _started = false;
+
+  late final Animation<double> _progress = CurvedAnimation(
+    parent: _controller,
+    curve: const Interval(0.15, 1.0, curve: Curves.easeOutCubic),
+  );
+
+  late final Animation<double> _ringPulse = Tween(begin: 1.0, end: 1.06)
+      .animate(
+        CurvedAnimation(
+          parent: _controller,
+          curve: const Interval(
+            0.72,
+            1.0,
+            curve: Curves.easeOutBack,
+          ),
+        ),
+      );
+
+  late final Animation<double> _entrance = CurvedAnimation(
+    parent: _controller,
+    curve: const Interval(0.0, 0.5, curve: Curves.easeOut),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _maybeStart();
+  }
+
+  @override
+  void didUpdateWidget(covariant _CompetencyCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.animate != widget.animate) {
+      _maybeStart();
+    }
+  }
+
+  void _maybeStart() {
+    if (widget.animate && !_started) {
+      _started = true;
+      _controller.forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return _ProgressCard(
-      child: Column(
-        children: [
-          SizedBox(
-            width: 96.r,
-            height: 96.r,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                SizedBox(
+    final track = widget.track;
+    final competency = widget.competency;
+    final target = (competency.score / 100).clamp(0.0, 1.0);
+
+    return FadeTransition(
+      opacity: _entrance,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 0.12),
+          end: Offset.zero,
+        ).animate(_entrance),
+        child: _ProgressCard(
+          child: Column(
+            children: [
+              AnimatedBuilder(
+                animation: _controller,
+                builder: (context, child) => Transform.scale(
+                  scale: _ringPulse.value,
+                  child: child,
+                ),
+                child: SizedBox(
                   width: 96.r,
                   height: 96.r,
-                  child: CircularProgressIndicator(
-                    value: competency.score / 100,
-                    strokeWidth: 6,
-                    backgroundColor: AppColors.surfaceContainerHigh,
-                    valueColor: AlwaysStoppedAnimation(track.color),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      SizedBox(
+                        width: 96.r,
+                        height: 96.r,
+                        child: CircularProgressIndicator(
+                          value: target * _progress.value,
+                          strokeWidth: 6,
+                          backgroundColor: AppColors.surfaceContainerHigh,
+                          valueColor: AlwaysStoppedAnimation(track.color),
+                        ),
+                      ),
+                      TweenAnimationBuilder<double>(
+                        tween: Tween(begin: 0, end: competency.score.toDouble()),
+                        duration: const Duration(milliseconds: 1100),
+                        curve: Curves.easeOutCubic,
+                        builder: (context, score, _) => Text(
+                          '${score.round()}',
+                          style: AppTypography.numeralLg.copyWith(
+                            color: AppColors.onSurface,
+                            fontSize: 28.sp,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                Text(
-                  '${competency.score}',
-                  style: AppTypography.numeralLg.copyWith(
-                    color: AppColors.onSurface,
-                    fontSize: 28.sp,
-                  ),
+              ),
+              SizedBox(height: AppSpacing.sm),
+              Text(
+                track.name,
+                style: AppTypography.bodyLg.copyWith(
+                  color: AppColors.onSurface,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 18.sp,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          SizedBox(height: AppSpacing.sm),
-          Text(
-            track.name,
-            style: AppTypography.bodyLg.copyWith(
-              color: AppColors.onSurface,
-              fontWeight: FontWeight.w700,
-              fontSize: 18.sp,
-            ),
-          ),
-          SizedBox(height: 2.r),
-          Text(
-            competency.level,
-            style: AppTypography.labelMono.copyWith(
-              color: AppColors.onSurfaceVariant,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -597,11 +981,15 @@ class _FocusAreaCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Text(
-                  area.title,
-                  style: AppTypography.bodyLg.copyWith(
-                    color: AppColors.onSurface,
-                    fontWeight: FontWeight.w700,
+                Expanded(
+                  child: Text(
+                    area.title,
+                    style: AppTypography.bodyLg.copyWith(
+                      color: AppColors.onSurface,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 if (area.critical) ...[
@@ -627,7 +1015,6 @@ class _FocusAreaCard extends StatelessWidget {
                     ),
                   ),
                 ],
-                const Spacer(),
                 Text(
                   '${(area.percent * 100).round()}%',
                   style: AppTypography.numeralLg.copyWith(
