@@ -46,3 +46,24 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Goldie (store assets / screenshots) output
+/goldie/out/
+/goldie/*.log
+
+# Screenshot capture artifacts written by simulator/goldie runs
+/flutter_*.png
+
+# Environment & secrets
+.env
+.env.*
+*.keystore
+*.jks
+*.p8
+*.p12
+key.properties
+service-account*.json
+
+# Firebase native config (contains API keys; add your own as templates)
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
