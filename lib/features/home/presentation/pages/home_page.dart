@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 
+import '../../../../core/storage/daily_challenge_store.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
@@ -11,7 +12,6 @@ import '../../../../core/widgets/activity_heatmap.dart';
 import '../../../../core/widgets/app_bottom_nav_bar.dart';
 import '../../../../core/widgets/app_top_bar.dart';
 import '../../../../core/widgets/track_pill.dart';
-import '../../../onboarding/data/datasources/onboarding_local_data_source.dart';
 import '../../../practice/presentation/pages/practice_page.dart';
 import '../../../practice/presentation/pages/practice_session_page.dart';
 import '../../../profile/presentation/pages/profile_page.dart';
@@ -23,13 +23,6 @@ import '../../../topics/presentation/pages/module_detail_page.dart';
 import '../../../topics/presentation/pages/topic_detail_page.dart';
 import '../../../../injection_container.dart' show sl;
 
-/// Title-cased display name for a runtime level ID.
-const Map<String, String> _kLevelDisplayNames = {
-  'junior': 'Junior',
-  'mid': 'Mid-Level',
-  'senior': 'Senior',
-};
-
 /// The app's landing dashboard: streak, activity, today's challenge,
 /// in-progress lesson, and weak topics.
 class HomePage extends StatelessWidget {
@@ -40,11 +33,6 @@ class HomePage extends StatelessWidget {
     if (hour < 12) return 'Good morning';
     if (hour < 18) return 'Good afternoon';
     return 'Good evening';
-  }
-
-  String get _levelLabel {
-    final levelId = sl<OnboardingLocalDataSource>().selectedRuntimeLevel;
-    return _kLevelDisplayNames[levelId] ?? 'Dev';
   }
 
   @override
@@ -92,7 +80,7 @@ class HomePage extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '$_greeting, $_levelLabel Dev.',
+                          '$_greeting, Dev.',
                           style: AppTypography.headlineLgResponsive(context)
                               .copyWith(color: AppColors.onSurface),
                         ),
@@ -147,12 +135,21 @@ class HomePage extends StatelessWidget {
                             if (tracks.isEmpty) {
                               return const SizedBox.shrink();
                             }
-                            final track = tracks.first;
+                            // The daily challenge rotates through the tracks
+                            // one per calendar day, deterministic for the day.
+                            final epochDays =
+                                DateTime.now().millisecondsSinceEpoch ~/
+                                Duration.millisecondsPerDay;
+                            final track =
+                                tracks[epochDays % tracks.length];
                             final trackName = track.name;
                             final trackId = track.id;
+                            final doneToday =
+                                sl<DailyChallengeStore>().isDoneToday();
                             return _DailyChallengeCard(
                               trackName: trackName,
                               trackId: trackId,
+                              completed: doneToday,
                               onStart: () => Navigator.of(context).push(
                                 MaterialPageRoute(
                                   builder: (_) => PracticeSessionPage(
@@ -384,11 +381,15 @@ class _DailyChallengeCard extends StatelessWidget {
   const _DailyChallengeCard({
     required this.trackName,
     required this.trackId,
+    required this.completed,
     required this.onStart,
   });
 
   final String trackName;
   final String trackId;
+
+  /// True once today's challenge has been finished, which locks the card.
+  final bool completed;
   final VoidCallback onStart;
 
   @override
@@ -408,12 +409,18 @@ class _DailyChallengeCard extends StatelessWidget {
                   ),
                 ),
               ),
-              Icon(Icons.hub_rounded, size: 20.r, color: AppColors.primary),
+              Icon(
+                completed ? Icons.check_circle_rounded : Icons.hub_rounded,
+                size: 20.r,
+                color: AppColors.primary,
+              ),
             ],
           ),
           SizedBox(height: AppSpacing.sm),
           Text(
-            'Ready for today\'s practice?',
+            completed
+                ? 'Today\'s challenge complete'
+                : 'Ready for today\'s practice?',
             style: AppTypography.headlineMd.copyWith(
               color: AppColors.onSurface,
               fontSize: 22.sp,
@@ -421,7 +428,9 @@ class _DailyChallengeCard extends StatelessWidget {
           ),
           SizedBox(height: 2.r),
           Text(
-            'Keep your streak going',
+            completed
+                ? 'Come back tomorrow for a new one'
+                : 'Keep your streak going',
             style: AppTypography.bodyMd.copyWith(
               color: AppColors.onSurfaceVariant,
             ),
@@ -436,12 +445,12 @@ class _DailyChallengeCard extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: onStart,
+              onPressed: completed ? null : onStart,
               style: ElevatedButton.styleFrom(
                 padding: EdgeInsets.symmetric(vertical: 14.r),
                 shape: RoundedRectangleBorder(borderRadius: AppRadius.radiusMd),
               ),
-              child: const Text('Start Challenge'),
+              child: Text(completed ? 'Completed' : 'Start Challenge'),
             ),
           ),
         ],

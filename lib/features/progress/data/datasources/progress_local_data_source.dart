@@ -116,6 +116,11 @@ class ProgressFirestoreDataSource {
     final todayKey = _dateKey(DateTime.now());
     final activityRef = userRef.collection('activityDaily').doc(todayKey);
 
+    // Best-effort live module total so the completion component of the
+    // blended score is recorded correctly (not deferred to the read path).
+    final moduleTotals = await _getModuleTotals({trackId});
+    final modulesTotal = moduleTotals[trackId] ?? 0;
+
     try {
       await _firestore.runTransaction((txn) async {
         final moduleSnap = await txn.get(moduleRef);
@@ -144,6 +149,7 @@ class ProgressFirestoreDataSource {
           final score = _blendedScore(
             channels: channels,
             modulesCompleted: modulesCompleted,
+            modulesTotal: modulesTotal,
           );
           competencies[index] = {
             ...competencies[index],
@@ -156,6 +162,7 @@ class ProgressFirestoreDataSource {
           final score = _blendedScore(
             channels: channels,
             modulesCompleted: 1,
+            modulesTotal: modulesTotal,
           );
           competencies.add({
             'trackId': trackId,
@@ -221,6 +228,11 @@ class ProgressFirestoreDataSource {
     final activityRef = userRef.collection('activityDaily').doc(todayKey);
     final attemptRef = userRef.collection('attempts').doc();
 
+    // Best-effort live module total so the completion component of the
+    // blended score is recorded correctly (not deferred to the read path).
+    final moduleTotals = await _getModuleTotals({trackId});
+    final modulesTotal = moduleTotals[trackId] ?? 0;
+
     try {
       await _firestore.runTransaction((txn) async {
         final overviewSnap = await txn.get(overviewRef);
@@ -261,6 +273,7 @@ class ProgressFirestoreDataSource {
         final roundedScore = _blendedScore(
           channels: channels,
           modulesCompleted: modulesCompleted,
+          modulesTotal: modulesTotal,
         );
         final competencyEntry = {
           'trackId': trackId,
@@ -459,9 +472,9 @@ class ProgressFirestoreDataSource {
   }
 
   /// The blended competency score (0-100): weighted average of each engaged
-  /// activity channel plus the track's module-completion ratio. Passing
-  /// [modulesTotal] of 0 (unknown at write time) simply skips the completion
-  /// component — reads recompute it against the live module catalog.
+  /// activity channel plus the track's module-completion ratio. Both write
+  /// and read paths now pass the live [modulesTotal]; a 0 (unknown/skipped)
+  /// simply omits the completion component.
   int _blendedScore({
     required Map<String, dynamic> channels,
     required int modulesCompleted,

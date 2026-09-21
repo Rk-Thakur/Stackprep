@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get_it/get_it.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'core/storage/daily_challenge_store.dart';
 import 'features/auth/data/datasources/auth_remote_data_source.dart';
 import 'features/auth/data/repositories/auth_repository_impl.dart';
 import 'features/auth/domain/repositories/auth_repository.dart';
@@ -64,6 +65,7 @@ Future<void> configureDependencies() async {
   sl.registerLazySingleton(
     () => ProgressFirestoreDataSource(firestore: sl(), firebaseAuth: sl()),
   );
+  sl.registerLazySingleton(() => DailyChallengeStore(prefs: sl()));
 
   // Repositories
   sl.registerLazySingleton<AuthRepository>(
@@ -133,6 +135,7 @@ Future<void> configureDependencies() async {
     () => PracticeSessionBloc(
       getPracticeQuestions: sl(),
       recordAttempt: sl(),
+      dailyChallengeStore: sl(),
     ),
   );
 }

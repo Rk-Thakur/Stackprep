@@ -1,10 +1,17 @@
+import 'dart:math';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/error/failures.dart';
+import '../../../../core/storage/daily_challenge_store.dart';
 import '../../../progress/domain/usecases/record_attempt.dart';
+import '../../domain/entities/practice_question.dart';
 import '../../domain/usecases/get_practice_questions.dart';
 import 'practice_session_event.dart';
 import 'practice_session_state.dart';
+
+/// Number of questions in each daily challenge session.
+const int kDailyChallengeQuestionCount = 10;
 
 /// Drives a single practice run: question flow, answer grading, and the
 /// final score handed to the summary screen.
@@ -13,8 +20,10 @@ class PracticeSessionBloc
   PracticeSessionBloc({
     required GetPracticeQuestions getPracticeQuestions,
     required RecordAttempt recordAttempt,
+    required DailyChallengeStore dailyChallengeStore,
   }) : _getPracticeQuestions = getPracticeQuestions,
        _recordAttempt = recordAttempt,
+       _dailyChallengeStore = dailyChallengeStore,
        super(const PracticeSessionState()) {
     on<PracticeSessionStarted>(_onStarted);
     on<PracticeAnswerSelected>(_onAnswerSelected);
@@ -25,6 +34,7 @@ class PracticeSessionBloc
 
   final GetPracticeQuestions _getPracticeQuestions;
   final RecordAttempt _recordAttempt;
+  final DailyChallengeStore _dailyChallengeStore;
 
   Future<void> _onStarted(
     PracticeSessionStarted event,
@@ -47,7 +57,9 @@ class PracticeSessionBloc
       (questions) => emit(
         state.copyWith(
           status: PracticeSessionStatus.ready,
-          questions: questions,
+          questions: event.challenge
+              ? _buildDailyChallenge(questions)
+              : questions,
           currentIndex: 0,
           clearSelectedIndex: true,
           checked: false,
@@ -104,6 +116,9 @@ class PracticeSessionBloc
           total: state.totalQuestions,
         ),
       );
+      if (state.challenge) {
+        await _dailyChallengeStore.markDoneToday();
+      }
       emit(state.copyWith(completed: true));
       return;
     }
@@ -114,6 +129,16 @@ class PracticeSessionBloc
         checked: false,
       ),
     );
+  }
+
+  /// Picks today's fixed challenge set: a deterministic per-date shuffle
+  /// capped to [kDailyChallengeQuestionCount], so every user sees the same
+  /// questions on the same day and the set rolls over each calendar day.
+  List<PracticeQuestion> _buildDailyChallenge(List<PracticeQuestion> all) {
+    final now = DateTime.now();
+    final seed = now.year * 10000 + now.month * 100 + now.day;
+    final shuffled = List<PracticeQuestion>.of(all)..shuffle(Random(seed));
+    return shuffled.take(kDailyChallengeQuestionCount).toList();
   }
 
   Future<void> _onQuestionSkipped(

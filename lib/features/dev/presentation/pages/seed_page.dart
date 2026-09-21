@@ -58,8 +58,8 @@ class _SeedPageState extends State<SeedPage>
       backgroundColor: AppColors.surface,
       appBar: AppBar(
         title: const Text('Firestore Admin'),
-        backgroundColor: AppColors.surfaceContainer,
-        foregroundColor: AppColors.onSurface,
+        // backgroundColor: AppColors.surfaceContainer,
+        // foregroundColor: AppColors.onSurface,
         actions: [
           TextButton.icon(
             onPressed: _seedApp,
@@ -296,7 +296,7 @@ class _TracksTabState extends State<_TracksTab> {
               : ListView.separated(
                   padding: EdgeInsets.all(AppSpacing.md),
                   itemCount: _tracks.length,
-                  separatorBuilder: (_, __) => SizedBox(height: AppSpacing.sm),
+                  separatorBuilder: (_, _) => SizedBox(height: AppSpacing.sm),
                   itemBuilder: (context, i) {
                     final t = _tracks[i];
                     return Container(
@@ -826,7 +826,7 @@ class _ModulesTabState extends State<_ModulesTab> {
               : ListView.separated(
                   padding: EdgeInsets.all(AppSpacing.md),
                   itemCount: _modules.length,
-                  separatorBuilder: (_, __) => SizedBox(height: AppSpacing.sm),
+                  separatorBuilder: (_, _) => SizedBox(height: AppSpacing.sm),
                   itemBuilder: (context, i) {
                     final m = _modules[i];
                     final content = m['content'] as List<dynamic>? ?? [];
@@ -1368,7 +1368,7 @@ class _ContentTabState extends State<_ContentTab> {
               : ListView.separated(
                   padding: EdgeInsets.all(AppSpacing.md),
                   itemCount: _contentBlocks.length,
-                  separatorBuilder: (_, __) => SizedBox(height: AppSpacing.sm),
+                  separatorBuilder: (_, _) => SizedBox(height: AppSpacing.sm),
                   itemBuilder: (context, i) {
                     final block = _contentBlocks[i];
                     final type = block['type'] ?? 'explanation';
@@ -1935,7 +1935,7 @@ class _QuestionsTabState extends State<_QuestionsTab> {
               : ListView.separated(
                   padding: EdgeInsets.all(AppSpacing.md),
                   itemCount: _filteredQuestions.length,
-                  separatorBuilder: (_, __) => SizedBox(height: AppSpacing.sm),
+                  separatorBuilder: (_, _) => SizedBox(height: AppSpacing.sm),
                   itemBuilder: (context, i) {
                     final q = _filteredQuestions[i];
                     return Container(
@@ -1968,20 +1968,25 @@ class _QuestionsTabState extends State<_QuestionsTab> {
                                 ),
                               ),
                               SizedBox(width: AppSpacing.xs),
-                              Container(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: 6.r,
-                                  vertical: 2.r,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppColors.surfaceContainerHigh,
-                                  borderRadius: AppRadius.radiusSm,
-                                ),
-                                child: Text(
-                                  q['moduleTitle'] ?? '',
-                                  style: AppTypography.codeSm.copyWith(
-                                    color: AppColors.onSurfaceVariant,
-                                    fontSize: 9.sp,
+                              Flexible(
+                                fit: FlexFit.loose,
+                                child: Container(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: 6.r,
+                                    vertical: 2.r,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surfaceContainerHigh,
+                                    borderRadius: AppRadius.radiusSm,
+                                  ),
+                                  child: Text(
+                                    q['moduleTitle'] ?? '',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: AppTypography.codeSm.copyWith(
+                                      color: AppColors.onSurfaceVariant,
+                                      fontSize: 9.sp,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -1989,6 +1994,8 @@ class _QuestionsTabState extends State<_QuestionsTab> {
                               Expanded(
                                 child: Text(
                                   q['question'] ?? '',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: AppTypography.bodyMd.copyWith(
                                     color: AppColors.onSurface,
                                   ),
@@ -2209,7 +2216,7 @@ class _QuestionsTabState extends State<_QuestionsTab> {
                       Switch(
                         value: _includeCode,
                         onChanged: (v) => setState(() => _includeCode = v),
-                        activeColor: AppColors.primary,
+                        activeThumbColor: AppColors.primary,
                       ),
                     ],
                   ),
@@ -2530,7 +2537,7 @@ class _FlipcardsTabState extends State<_FlipcardsTab> {
               : ListView.separated(
                   padding: EdgeInsets.all(AppSpacing.md),
                   itemCount: _flipcards.length,
-                  separatorBuilder: (_, __) => SizedBox(height: AppSpacing.sm),
+                  separatorBuilder: (_, _) => SizedBox(height: AppSpacing.sm),
                   itemBuilder: (context, i) {
                     final fc = _flipcards[i];
                     return Container(
@@ -2714,7 +2721,7 @@ class _FlipcardsTabState extends State<_FlipcardsTab> {
                       Switch(
                         value: _includeCode,
                         onChanged: (v) => setState(() => _includeCode = v),
-                        activeColor: AppColors.primary,
+                        activeThumbColor: AppColors.primary,
                       ),
                     ],
                   ),

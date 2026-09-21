@@ -98,14 +98,18 @@ class CodeBlock extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Text(
-                  header,
-                  style: AppTypography.labelMono.copyWith(
-                    color: AppColors.onSurfaceVariant,
-                    fontSize: 11.sp,
+                Expanded(
+                  child: Text(
+                    header,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.labelMono.copyWith(
+                      color: AppColors.onSurfaceVariant,
+                      fontSize: 11.sp,
+                    ),
                   ),
                 ),
-                const Spacer(),
+                SizedBox(width: AppSpacing.sm),
                 InkWell(
                   onTap: () => _copy(context),
                   borderRadius: AppRadius.radiusSm,
