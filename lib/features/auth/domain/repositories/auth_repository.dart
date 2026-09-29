@@ -25,4 +25,9 @@ abstract interface class AuthRepository {
   Future<Either<Failure, AppUser?>> signInWithGoogle();
 
   Future<Either<Failure, void>> signOut();
+
+  /// Erases the account permanently: the backend record, everything under it,
+  /// and the auth identity. Unlike [signOut] this cannot be undone, so a
+  /// failure is surfaced rather than swallowed.
+  Future<Either<Failure, void>> deleteAccount();
 }

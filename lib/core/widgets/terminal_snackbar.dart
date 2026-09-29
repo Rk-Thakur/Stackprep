@@ -128,9 +128,7 @@ class _TerminalSnackbarContentState extends State<_TerminalSnackbarContent>
                   builder: (context, _) => Container(
                     height: 2.r,
                     width: double.infinity,
-                    color: color.withValues(
-                      alpha: 0.1 + _pulse.value * 0.25,
-                    ),
+                    color: color.withValues(alpha: 0.1 + _pulse.value * 0.25),
                   ),
                 ),
               ],

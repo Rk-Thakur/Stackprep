@@ -22,6 +22,7 @@ import '../../domain/entities/readiness_summary.dart';
 import '../../domain/entities/track_competency.dart';
 import '../cubit/progress_cubit.dart';
 import '../cubit/progress_state.dart';
+import '../../../../core/theme/app_theme_scope.dart';
 
 IconData _trendIcon(TrendDirection trend) => switch (trend) {
   TrendDirection.up => Icons.trending_up_rounded,
@@ -52,9 +53,11 @@ class ProgressPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => sl<ProgressCubit>()..load(),
-      child: const _ProgressLifecycle(child: _ProgressView()),
+    return Themed(
+      child: BlocProvider(
+        create: (_) => sl<ProgressCubit>()..load(),
+        child: const _ProgressLifecycle(child: _ProgressView()),
+      ),
     );
   }
 }
@@ -99,9 +102,8 @@ class _ProgressView extends StatelessWidget {
   const _ProgressView();
 
   void _comingSoon(BuildContext context, String feature) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('$feature coming soon.')));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('$feature coming soon.')));
   }
 
   @override
@@ -155,8 +157,9 @@ class _ProgressView extends StatelessWidget {
                             _TrackFilterChip(
                               label: 'All',
                               selected: state.selectedTrackId == null,
-                              onTap: () =>
-                                  context.read<ProgressCubit>().selectTrack(null),
+                              onTap: () => context
+                                  .read<ProgressCubit>()
+                                  .selectTrack(null),
                             ),
                             for (final track in state.tracks)
                               _TrackFilterChip(
@@ -170,13 +173,14 @@ class _ProgressView extends StatelessWidget {
                           ],
                         ),
                         SizedBox(height: AppSpacing.md),
-                        for (var i = 0;
-                            i < state.filteredCompetencies.length;
-                            i++)
+                        for (
+                          var i = 0;
+                          i < state.filteredCompetencies.length;
+                          i++
+                        )
                           Padding(
                             padding: EdgeInsets.only(
-                              bottom:
-                                  i == state.filteredCompetencies.length - 1
+                              bottom: i == state.filteredCompetencies.length - 1
                                   ? 0
                                   : AppSpacing.md,
                             ),
@@ -269,9 +273,9 @@ class _ProgressView extends StatelessWidget {
                   );
                   return;
                 }
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const ProfilePage()),
-                );
+                Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const ProfilePage()));
               },
             ),
           ],
@@ -398,16 +402,14 @@ class _ProgressSkeleton extends StatelessWidget {
             SizedBox(height: AppSpacing.md),
             for (var i = 0; i < 2; i++)
               Padding(
-                padding: EdgeInsets.only(
-                  bottom: i == 1 ? 0 : AppSpacing.md,
-                ),
+                padding: EdgeInsets.only(bottom: i == 1 ? 0 : AppSpacing.md),
                 child: _ProgressCard(
                   child: Column(
                     children: [
                       Container(
                         width: 96.r,
                         height: 96.r,
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                           color: AppColors.surfaceContainerHigh,
                           shape: BoxShape.circle,
                         ),
@@ -670,7 +672,7 @@ class _SystemMasteryCard extends StatelessWidget {
               value: summary.globalReadinessScore,
               minHeight: 8.r,
               backgroundColor: AppColors.surfaceContainerHigh,
-              valueColor: const AlwaysStoppedAnimation(AppColors.primary),
+              valueColor: AlwaysStoppedAnimation(AppColors.primary),
             ),
           ),
           SizedBox(height: AppSpacing.xs),
@@ -720,10 +722,7 @@ class _TrackFilterChip extends StatelessWidget {
       onTap: onTap,
       borderRadius: AppRadius.radiusFull,
       child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.sm,
-          vertical: 8.r,
-        ),
+        padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 8.r),
         decoration: BoxDecoration(
           borderRadius: AppRadius.radiusFull,
           border: Border.all(
@@ -782,10 +781,7 @@ class _RevealOnScrollState extends State<_RevealOnScroll>
     final scrollable = Scrollable.of(context);
     final geometry = scrollable.context.findRenderObject() as RenderBox?;
     if (geometry == null || !geometry.hasSize) return;
-    final top = renderObject.localToGlobal(
-      Offset.zero,
-      ancestor: geometry,
-    ).dy;
+    final top = renderObject.localToGlobal(Offset.zero, ancestor: geometry).dy;
     final bottom = top + renderObject.size.height;
     if (top < geometry.size.height && bottom > 0) {
       setState(() {
@@ -846,11 +842,7 @@ class _CompetencyCardState extends State<_CompetencyCard>
       .animate(
         CurvedAnimation(
           parent: _controller,
-          curve: const Interval(
-            0.72,
-            1.0,
-            curve: Curves.easeOutBack,
-          ),
+          curve: const Interval(0.72, 1.0, curve: Curves.easeOutBack),
         ),
       );
 
@@ -904,10 +896,8 @@ class _CompetencyCardState extends State<_CompetencyCard>
             children: [
               AnimatedBuilder(
                 animation: _controller,
-                builder: (context, child) => Transform.scale(
-                  scale: _ringPulse.value,
-                  child: child,
-                ),
+                builder: (context, child) =>
+                    Transform.scale(scale: _ringPulse.value, child: child),
                 child: SizedBox(
                   width: 96.r,
                   height: 96.r,
@@ -925,7 +915,10 @@ class _CompetencyCardState extends State<_CompetencyCard>
                         ),
                       ),
                       TweenAnimationBuilder<double>(
-                        tween: Tween(begin: 0, end: competency.score.toDouble()),
+                        tween: Tween(
+                          begin: 0,
+                          end: competency.score.toDouble(),
+                        ),
                         duration: const Duration(milliseconds: 1100),
                         curve: Curves.easeOutCubic,
                         builder: (context, score, _) => Text(

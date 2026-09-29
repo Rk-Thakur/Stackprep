@@ -22,7 +22,8 @@ import '../../../progress/presentation/cubit/progress_state.dart';
 import '../../../progress/presentation/pages/progress_page.dart';
 import '../../../../injection_container.dart' show sl;
 import 'account_settings_page.dart';
-import 'security_privacy_page.dart';
+import 'learning_stats_page.dart';
+import '../../../../core/theme/app_theme_scope.dart';
 
 /// Engineer ladder title derived from the onboarding-selected runtime level.
 String _engineerTitleFor(String levelId) {
@@ -39,21 +40,15 @@ String _engineerTitleFor(String levelId) {
 }
 
 class _PreferenceItem {
-  const _PreferenceItem({required this.icon, required this.title, this.tag});
+  const _PreferenceItem({required this.icon, required this.title});
 
   final IconData icon;
   final String title;
-  final String? tag;
 }
 
 const List<_PreferenceItem> _kPreferences = [
   _PreferenceItem(icon: Icons.settings_rounded, title: 'Account Settings'),
-  _PreferenceItem(
-    icon: Icons.credit_card_rounded,
-    title: 'Subscription',
-    tag: 'PRO',
-  ),
-  _PreferenceItem(icon: Icons.shield_outlined, title: 'Security & Privacy'),
+  _PreferenceItem(icon: Icons.query_stats_rounded, title: 'Learning Stats'),
 ];
 
 /// Profile tab: identity card, mastery/streak summary, linked tracks, and
@@ -76,81 +71,83 @@ class ProfilePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            AppTopBar(),
-            Expanded(
-              child: BlocProvider(
-                create: (_) => sl<ProgressCubit>()..load(),
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.fromLTRB(
-                    AppSpacing.margin,
-                    AppSpacing.md,
-                    AppSpacing.margin,
-                    AppSpacing.xl,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const _ProfileHeaderCard(),
-                      SizedBox(height: AppSpacing.md),
-                      const _MasteryScoreCard(),
-                      SizedBox(height: AppSpacing.md),
-                      const _StreakCard(),
-                      SizedBox(height: AppSpacing.md),
-                      const _LinkedTracksCard(),
-                      SizedBox(height: AppSpacing.md),
-                      _PreferencesCard(
-                        onTapItem: (title) {
-                          if (title == 'Account Settings') {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const AccountSettingsPage(),
-                              ),
-                            );
-                            return;
-                          }
-                          if (title == 'Security & Privacy') {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const SecurityPrivacyPage(),
-                              ),
-                            );
-                            return;
-                          }
-                          _comingSoon(context, title);
-                        },
-                      ),
-                      SizedBox(height: AppSpacing.md),
-                      _LogoutButton(onTap: () => _logout(context)),
-                    ],
+    return Themed(
+      child: Scaffold(
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              AppTopBar(),
+              Expanded(
+                child: BlocProvider(
+                  create: (_) => sl<ProgressCubit>()..load(),
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.fromLTRB(
+                      AppSpacing.margin,
+                      AppSpacing.md,
+                      AppSpacing.margin,
+                      AppSpacing.xl,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const _ProfileHeaderCard(),
+                        SizedBox(height: AppSpacing.md),
+                        const _MasteryScoreCard(),
+                        SizedBox(height: AppSpacing.md),
+                        const _StreakCard(),
+                        SizedBox(height: AppSpacing.md),
+                        const _LinkedTracksCard(),
+                        SizedBox(height: AppSpacing.md),
+                        _PreferencesCard(
+                          onTapItem: (title) {
+                            if (title == 'Account Settings') {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const AccountSettingsPage(),
+                                ),
+                              );
+                              return;
+                            }
+                            if (title == 'Learning Stats') {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const LearningStatsPage(),
+                                ),
+                              );
+                              return;
+                            }
+                            _comingSoon(context, title);
+                          },
+                        ),
+                        SizedBox(height: AppSpacing.md),
+                        _LogoutButton(onTap: () => _logout(context)),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-            AppBottomNavBar(
-              currentIndex: 3,
-              onTap: (i) {
-                if (i == 3) return;
-                if (i == 0) {
-                  Navigator.of(context).popUntil((route) => route.isFirst);
-                  return;
-                }
-                if (i == 1) {
+              AppBottomNavBar(
+                currentIndex: 3,
+                onTap: (i) {
+                  if (i == 3) return;
+                  if (i == 0) {
+                    Navigator.of(context).popUntil((route) => route.isFirst);
+                    return;
+                  }
+                  if (i == 1) {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const PracticePage()),
+                    );
+                    return;
+                  }
                   Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const PracticePage()),
+                    MaterialPageRoute(builder: (_) => const ProgressPage()),
                   );
-                  return;
-                }
-                Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => const ProgressPage()));
-              },
-            ),
-          ],
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -315,9 +312,7 @@ class _MasteryScoreCard extends StatelessWidget {
                           value: score.clamp(0.0, 1.0),
                           strokeWidth: 9,
                           backgroundColor: AppColors.surfaceContainerHigh,
-                          valueColor: const AlwaysStoppedAnimation(
-                            AppColors.primary,
-                          ),
+                          valueColor: AlwaysStoppedAnimation(AppColors.primary),
                         ),
                       ),
                       Text(
@@ -352,71 +347,71 @@ class _StreakCard extends StatelessWidget {
       builder: (context, state) {
         final streak = state.summary?.currentStreakDays ?? 0;
         return _ProfileCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'CURRENT_STREAK',
-                  style: AppTypography.labelMono.copyWith(
-                    color: AppColors.onSurfaceVariant,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'CURRENT_STREAK',
+                style: AppTypography.labelMono.copyWith(
+                  color: AppColors.onSurfaceVariant,
+                ),
+              ),
+              SizedBox(height: AppSpacing.sm),
+              Center(
+                child: RichText(
+                  text: TextSpan(
+                    children: [
+                      TextSpan(
+                        text: '$streak',
+                        style: AppTypography.numeralLg.copyWith(
+                          color: AppColors.primary,
+                          fontSize: 34.sp,
+                        ),
+                      ),
+                      TextSpan(
+                        text: ' days',
+                        style: AppTypography.bodyLg.copyWith(
+                          color: AppColors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                SizedBox(height: AppSpacing.sm),
-                Center(
-                  child: RichText(
-                    text: TextSpan(
-                      children: [
-                        TextSpan(
-                          text: '$streak',
-                          style: AppTypography.numeralLg.copyWith(
-                            color: AppColors.primary,
-                            fontSize: 34.sp,
-                          ),
-                        ),
-                        TextSpan(
-                          text: ' days',
-                          style: AppTypography.bodyLg.copyWith(
-                            color: AppColors.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                SizedBox(height: AppSpacing.md),
-                Row(
-                  children: [
-                    for (var i = 0; i < 4; i++)
-                      Expanded(
-                        child: Padding(
-                          padding: EdgeInsets.only(right: i == 3 ? 0 : 4.r),
-                          child: Container(
-                            height: 8.r,
-                            decoration: BoxDecoration(
-                              color: kReadinessScale[i + 1],
-                              borderRadius: AppRadius.radiusSm,
-                            ),
+              ),
+              SizedBox(height: AppSpacing.md),
+              Row(
+                children: [
+                  for (var i = 0; i < 4; i++)
+                    Expanded(
+                      child: Padding(
+                        padding: EdgeInsets.only(right: i == 3 ? 0 : 4.r),
+                        child: Container(
+                          height: 8.r,
+                          decoration: BoxDecoration(
+                            color: kReadinessScale[i + 1],
+                            borderRadius: AppRadius.radiusSm,
                           ),
                         ),
                       ),
-                  ],
-                ),
-                SizedBox(height: AppSpacing.xs),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Text(
-                    'Optimal Readiness',
-                    style: AppTypography.bodyMd.copyWith(
-                      color: AppColors.onSurfaceVariant,
-                      fontSize: 12.sp,
                     ),
+                ],
+              ),
+              SizedBox(height: AppSpacing.xs),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  'Optimal Readiness',
+                  style: AppTypography.bodyMd.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                    fontSize: 12.sp,
                   ),
                 ),
-              ],
-            ),
-          );
-        },
-      );
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }
 
@@ -491,7 +486,7 @@ class _LinkedTracksCardState extends State<_LinkedTracksCard> {
               label: const Text('ADD_TRACK'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.onSurface,
-                side: const BorderSide(color: AppColors.outlineVariant),
+                side: BorderSide(color: AppColors.outlineVariant),
                 padding: EdgeInsets.symmetric(vertical: 12.r),
                 textStyle: AppTypography.labelMono,
                 shape: RoundedRectangleBorder(borderRadius: AppRadius.radiusMd),
@@ -557,27 +552,6 @@ class _PreferencesCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                    if (item.tag != null) ...[
-                      Container(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: 6.r,
-                          vertical: 2.r,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          borderRadius: AppRadius.radiusSm,
-                        ),
-                        child: Text(
-                          item.tag!,
-                          style: AppTypography.labelMono.copyWith(
-                            color: AppColors.onPrimary,
-                            fontSize: 10.sp,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: AppSpacing.xs),
-                    ],
                     Icon(
                       Icons.chevron_right_rounded,
                       size: 20.r,

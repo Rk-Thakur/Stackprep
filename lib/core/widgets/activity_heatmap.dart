@@ -8,13 +8,26 @@ import '../theme/app_radius.dart';
 
 /// The amber intensity scale shared by [ActivityHeatmap] cells and
 /// [ReadinessLegend], lowest to highest.
-const List<Color> kReadinessScale = [
-  AppColors.surfaceContainerHigh,
-  Color(0xFF6B4A1E),
-  Color(0xFFB47A2A),
-  AppColors.primaryContainer,
-  AppColors.primary,
-];
+///
+/// A getter rather than a constant so the mid-tones can be tuned per
+/// brightness: the dark scale needs muted mid-tones, while the light scale
+/// needs much darker ones to read as "more".
+List<Color> get kReadinessScale => switch (AppColors.brightness) {
+  Brightness.dark => [
+    AppColors.surfaceContainerHigh,
+    const Color(0xFF6B4A1E),
+    const Color(0xFFB47A2A),
+    AppColors.primaryContainer,
+    AppColors.primary,
+  ],
+  Brightness.light => [
+    AppColors.surfaceContainerHigh,
+    const Color(0xFFFFE2AC),
+    const Color(0xFFFFC65C),
+    AppColors.primaryContainer,
+    AppColors.primary,
+  ],
+};
 
 /// A GitHub-style grid of small squares showing recent daily activity.
 ///
@@ -68,11 +81,12 @@ class ActivityHeatmap extends StatelessWidget {
             final level = index >= days
                 ? 0
                 : realLevels != null
-                    ? (index < realLevels.length
-                        ? realLevels[index].clamp(0, 4)
-                        : 0)
-                    : random.nextInt(5);
-            final inStreak = index >= streakStart &&
+                ? (index < realLevels.length
+                      ? realLevels[index].clamp(0, 4)
+                      : 0)
+                : random.nextInt(5);
+            final inStreak =
+                index >= streakStart &&
                 index <= streakStart + streakDays - 1 &&
                 level > 0;
             final cellColor = inStreak
@@ -88,10 +102,7 @@ class ActivityHeatmap extends StatelessWidget {
                   color: cellColor,
                   borderRadius: AppRadius.radiusSm,
                   border: inStreak
-                      ? Border.all(
-                          color: AppColors.primary,
-                          width: 1.5,
-                        )
+                      ? Border.all(color: AppColors.primary, width: 1.5)
                       : null,
                   boxShadow: glowColor != null
                       ? [

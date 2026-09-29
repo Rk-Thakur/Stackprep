@@ -49,9 +49,8 @@ class CodeBlock extends StatelessWidget {
 
   void _copy(BuildContext context) {
     Clipboard.setData(ClipboardData(text: lines.join('\n')));
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Copied to clipboard.')));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Copied to clipboard.')));
   }
 
   List<InlineSpan> _highlightLine(String line) {

@@ -16,6 +16,7 @@ import '../../../../injection_container.dart';
 import '../../../onboarding/data/stack_tracks.dart';
 import '../../../onboarding/domain/entities/stack_track.dart';
 import '../../../progress/domain/usecases/record_attempt.dart';
+import '../../../../core/theme/app_theme_scope.dart';
 
 /// 3D flip-card practice view launched from a topic's "3D Flashcards" action.
 class FlashcardPage extends StatelessWidget {
@@ -25,7 +26,7 @@ class FlashcardPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _FlashcardView(topicId: topicId);
+    return Themed(child: _FlashcardView(topicId: topicId));
   }
 }
 
@@ -80,8 +81,7 @@ class _FlashcardViewState extends State<_FlashcardView>
             .toList();
         if (language.isNotEmpty && (codeLines?.isNotEmpty ?? false)) {
           code = _CodeSnippet(
-            filename:
-                (data['codeHeader'] ?? language).toString(),
+            filename: (data['codeHeader'] ?? language).toString(),
             language: language,
             lines: codeLines!,
           );
@@ -178,15 +178,15 @@ class _FlashcardViewState extends State<_FlashcardView>
               child: _loading
                   ? const _FlashcardSkeleton()
                   : _cards.isEmpty
-                      ? Center(
-                          child: Text(
-                            'No flashcards for $trackName yet.',
-                            style: AppTypography.bodyLg.copyWith(
-                              color: AppColors.onSurfaceVariant,
-                            ),
-                          ),
-                        )
-                      : _buildDeck(accentColor: accentColor, trackName: trackName),
+                  ? Center(
+                      child: Text(
+                        'No flashcards for $trackName yet.',
+                        style: AppTypography.bodyLg.copyWith(
+                          color: AppColors.onSurfaceVariant,
+                        ),
+                      ),
+                    )
+                  : _buildDeck(accentColor: accentColor, trackName: trackName),
             ),
           ],
         ),
@@ -194,10 +194,7 @@ class _FlashcardViewState extends State<_FlashcardView>
     );
   }
 
-  Widget _buildDeck({
-    required Color accentColor,
-    required String trackName,
-  }) {
+  Widget _buildDeck({required Color accentColor, required String trackName}) {
     final card = _cards[_index];
     return Padding(
       padding: EdgeInsets.all(AppSpacing.margin),
@@ -228,8 +225,7 @@ class _FlashcardViewState extends State<_FlashcardView>
                     child: showBack
                         ? Transform(
                             alignment: Alignment.center,
-                            transform: Matrix4.identity()
-                              ..rotateY(math.pi),
+                            transform: Matrix4.identity()..rotateY(math.pi),
                             child: _CardBack(card: card),
                           )
                         : _CardFront(
@@ -261,12 +257,8 @@ class _FlashcardViewState extends State<_FlashcardView>
                     ),
                   ),
                   style: OutlinedButton.styleFrom(
-                    side: const BorderSide(
-                      color: AppColors.outlineVariant,
-                    ),
-                    padding: EdgeInsets.symmetric(
-                      vertical: AppSpacing.md,
-                    ),
+                    side: BorderSide(color: AppColors.outlineVariant),
+                    padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
                     shape: RoundedRectangleBorder(
                       borderRadius: AppRadius.radiusBase,
                     ),
@@ -291,9 +283,7 @@ class _FlashcardViewState extends State<_FlashcardView>
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryContainer,
-                    padding: EdgeInsets.symmetric(
-                      vertical: AppSpacing.md,
-                    ),
+                    padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
                     shape: RoundedRectangleBorder(
                       borderRadius: AppRadius.radiusBase,
                     ),
@@ -428,9 +418,7 @@ class _CardFront extends StatelessWidget {
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TrackPill(label: trackName, dotColor: accentColor),
-              ],
+              children: [TrackPill(label: trackName, dotColor: accentColor)],
             ),
             Expanded(
               child: Center(
@@ -551,7 +539,7 @@ class _DotDivider extends StatelessWidget {
               (_) => Container(
                 width: 3.r,
                 height: 3.r,
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   color: AppColors.outlineVariant,
                   shape: BoxShape.circle,
                 ),
@@ -685,11 +673,7 @@ const _kKeywords = <String>{
 };
 
 class _Flashcard {
-  const _Flashcard({
-    required this.term,
-    required this.definition,
-    this.code,
-  });
+  const _Flashcard({required this.term, required this.definition, this.code});
 
   final String term;
   final String definition;

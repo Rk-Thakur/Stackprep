@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:skeletonizer/skeletonizer.dart';
 
 import '../../../../core/storage/daily_challenge_store.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -21,6 +22,7 @@ import '../../../progress/domain/entities/focus_area.dart';
 import '../../../progress/presentation/pages/progress_page.dart';
 import '../../../topics/presentation/pages/module_detail_page.dart';
 import '../../../topics/presentation/pages/topic_detail_page.dart';
+import '../../../../core/theme/app_theme_scope.dart';
 import '../../../../injection_container.dart' show sl;
 
 /// The app's landing dashboard: streak, activity, today's challenge,
@@ -37,10 +39,12 @@ class HomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => sl<ProgressCubit>()..load(),
-      child: _HomeLifecycle(
-        child: Builder(builder: (context) => _buildHome(context)),
+    return Themed(
+      child: BlocProvider(
+        create: (_) => sl<ProgressCubit>()..load(),
+        child: _HomeLifecycle(
+          child: Builder(builder: (context) => _buildHome(context)),
+        ),
       ),
     );
   }
@@ -66,154 +70,12 @@ class HomePage extends StatelessWidget {
             children: [
               AppTopBar(),
               Expanded(
-                child: RefreshIndicator(
-                  onRefresh: () => context.read<ProgressCubit>().load(),
-                  child: SingleChildScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: EdgeInsets.fromLTRB(
-                      AppSpacing.margin,
-                      AppSpacing.md,
-                      AppSpacing.margin,
-                      AppSpacing.xl,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '$_greeting, Dev.',
-                          style: AppTypography.headlineLgResponsive(context)
-                              .copyWith(color: AppColors.onSurface),
-                        ),
-                        SizedBox(height: AppSpacing.sm),
-                        BlocBuilder<ProgressCubit, ProgressState>(
-                          buildWhen: (previous, current) =>
-                              previous.summary?.currentStreakDays !=
-                                  current.summary?.currentStreakDays ||
-                              previous.status != current.status,
-                          builder: (context, state) {
-                            final streak =
-                                state.summary?.currentStreakDays ?? 0;
-                            return Row(
-                              children: [
-                                Icon(
-                                  Icons.local_fire_department_rounded,
-                                  size: 20.r,
-                                  color: AppColors.primary,
-                                ),
-                                SizedBox(width: AppSpacing.xs),
-                                Text(
-                                  'Your streak: ',
-                                  style: AppTypography.bodyLg.copyWith(
-                                    color: AppColors.onSurfaceVariant,
-                                  ),
-                                ),
-                                Text(
-                                  '$streak',
-                                  style: AppTypography.numeralLg.copyWith(
-                                    color: AppColors.primary,
-                                  ),
-                                ),
-                                SizedBox(width: AppSpacing.xs),
-                                Text(
-                                  'days',
-                                  style: AppTypography.bodyLg.copyWith(
-                                    color: AppColors.onSurfaceVariant,
-                                  ),
-                                ),
-                              ],
-                            );
-                          },
-                        ),
-                        SizedBox(height: AppSpacing.lg),
-                        const _ActivityCard(),
-                        SizedBox(height: AppSpacing.md),
-                        BlocBuilder<ProgressCubit, ProgressState>(
-                          buildWhen: (previous, current) =>
-                              previous.tracks != current.tracks,
-                          builder: (context, state) {
-                            final tracks = state.tracks;
-                            if (tracks.isEmpty) {
-                              return const SizedBox.shrink();
-                            }
-                            // The daily challenge rotates through the tracks
-                            // one per calendar day, deterministic for the day.
-                            final epochDays =
-                                DateTime.now().millisecondsSinceEpoch ~/
-                                Duration.millisecondsPerDay;
-                            final track =
-                                tracks[epochDays % tracks.length];
-                            final trackName = track.name;
-                            final trackId = track.id;
-                            final doneToday =
-                                sl<DailyChallengeStore>().isDoneToday();
-                            return _DailyChallengeCard(
-                              trackName: trackName,
-                              trackId: trackId,
-                              completed: doneToday,
-                              onStart: () => Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => PracticeSessionPage(
-                                    topicCode: trackId,
-                                    challenge: true,
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                        SizedBox(height: AppSpacing.md),
-                        BlocBuilder<ProgressCubit, ProgressState>(
-                          buildWhen: (previous, current) =>
-                              previous.summary?.globalReadinessScore !=
-                                  current.summary?.globalReadinessScore ||
-                              previous.focusAreas != current.focusAreas ||
-                              previous.tracks != current.tracks,
-                          builder: (context, state) {
-                            final summary = state.summary;
-                            final focus = state.focusAreas.isNotEmpty
-                                ? state.focusAreas.first
-                                : null;
-                            final hasTracks = state.tracks.isNotEmpty;
-                            final trackId =
-                                focus?.trackId ??
-                                (hasTracks ? state.tracks.first.id : null);
-                            final hasProgress =
-                                (summary?.globalReadinessScore ?? 0) > 0;
-                            return _ContinueCard(
-                              masteryScore: summary?.globalReadinessScore ?? 0,
-                              title: hasProgress
-                                  ? (focus?.title ?? 'Core Competencies')
-                                  : 'Get Started',
-                              subtitle: hasProgress
-                                  ? (focus != null
-                                        ? 'Ready for review'
-                                        : 'Pick a course to continue')
-                                  : 'Complete a course to see your mastery',
-                              onResume: () {
-                                if (trackId == null) return;
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        TopicDetailPage(trackId: trackId),
-                                  ),
-                                );
-                              },
-                              buttonLabel: hasProgress
-                                  ? 'Resume Course'
-                                  : 'Explore Courses',
-                            );
-                          },
-                        ),
-                        SizedBox(height: AppSpacing.md),
-                        BlocBuilder<ProgressCubit, ProgressState>(
-                          buildWhen: (previous, current) =>
-                              previous.focusAreas != current.focusAreas,
-                          builder: (context, state) =>
-                              _WeakTopicsCard(focusAreas: state.focusAreas),
-                        ),
-                      ],
-                    ),
-                  ),
+                child: BlocBuilder<ProgressCubit, ProgressState>(
+                  buildWhen: (previous, current) =>
+                      _isBootstrapping(previous) != _isBootstrapping(current),
+                  builder: (context, state) => _isBootstrapping(state)
+                      ? _HomeSkeleton(greeting: _greeting)
+                      : _buildDashboard(context),
                 ),
               ),
               AppBottomNavBar(
@@ -243,7 +105,161 @@ class HomePage extends StatelessWidget {
       ),
     );
   }
+
+  /// The loaded dashboard: greeting, streak, activity, daily challenge,
+  /// continue card, and weak topics — pull-to-refresh re-runs the load.
+  Widget _buildDashboard(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: () => context.read<ProgressCubit>().load(),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.margin,
+          AppSpacing.md,
+          AppSpacing.margin,
+          AppSpacing.xl,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '$_greeting, Dev.',
+              style: AppTypography.headlineLgResponsive(context)
+                  .copyWith(color: AppColors.onSurface),
+            ),
+            SizedBox(height: AppSpacing.sm),
+            BlocBuilder<ProgressCubit, ProgressState>(
+              buildWhen: (previous, current) =>
+                  previous.summary?.currentStreakDays !=
+                      current.summary?.currentStreakDays ||
+                  previous.status != current.status,
+              builder: (context, state) {
+                final streak = state.summary?.currentStreakDays ?? 0;
+                return Row(
+                  children: [
+                    Icon(
+                      Icons.local_fire_department_rounded,
+                      size: 20.r,
+                      color: AppColors.primary,
+                    ),
+                    SizedBox(width: AppSpacing.xs),
+                    Text(
+                      'Your streak: ',
+                      style: AppTypography.bodyLg.copyWith(
+                        color: AppColors.onSurfaceVariant,
+                      ),
+                    ),
+                    Text(
+                      '$streak',
+                      style: AppTypography.numeralLg.copyWith(
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    SizedBox(width: AppSpacing.xs),
+                    Text(
+                      'days',
+                      style: AppTypography.bodyLg.copyWith(
+                        color: AppColors.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+            SizedBox(height: AppSpacing.lg),
+            const _ActivityCard(),
+            SizedBox(height: AppSpacing.md),
+            BlocBuilder<ProgressCubit, ProgressState>(
+              buildWhen: (previous, current) =>
+                  previous.tracks != current.tracks,
+              builder: (context, state) {
+                final tracks = state.tracks;
+                if (tracks.isEmpty) {
+                  return const SizedBox.shrink();
+                }
+                // The daily challenge rotates through the tracks
+                // one per calendar day, deterministic for the day.
+                final epochDays =
+                    DateTime.now().millisecondsSinceEpoch ~/
+                    Duration.millisecondsPerDay;
+                final track = tracks[epochDays % tracks.length];
+                final trackName = track.name;
+                final trackId = track.id;
+                final doneToday = sl<DailyChallengeStore>().isDoneToday();
+                return _DailyChallengeCard(
+                  trackName: trackName,
+                  trackId: trackId,
+                  completed: doneToday,
+                  onStart: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => PracticeSessionPage(
+                        topicCode: trackId,
+                        challenge: true,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+            SizedBox(height: AppSpacing.md),
+            BlocBuilder<ProgressCubit, ProgressState>(
+              buildWhen: (previous, current) =>
+                  previous.summary?.globalReadinessScore !=
+                      current.summary?.globalReadinessScore ||
+                  previous.focusAreas != current.focusAreas ||
+                  previous.tracks != current.tracks,
+              builder: (context, state) {
+                final summary = state.summary;
+                final focus = state.focusAreas.isNotEmpty
+                    ? state.focusAreas.first
+                    : null;
+                final hasTracks = state.tracks.isNotEmpty;
+                final trackId =
+                    focus?.trackId ??
+                    (hasTracks ? state.tracks.first.id : null);
+                final hasProgress = (summary?.globalReadinessScore ?? 0) > 0;
+                return _ContinueCard(
+                  masteryScore: summary?.globalReadinessScore ?? 0,
+                  title: hasProgress
+                      ? (focus?.title ?? 'Core Competencies')
+                      : 'Get Started',
+                  subtitle: hasProgress
+                      ? (focus != null
+                            ? 'Ready for review'
+                            : 'Pick a course to continue')
+                      : 'Complete a course to see your mastery',
+                  onResume: () {
+                    if (trackId == null) return;
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => TopicDetailPage(trackId: trackId),
+                      ),
+                    );
+                  },
+                  buttonLabel: hasProgress
+                      ? 'Resume Course'
+                      : 'Explore Courses',
+                );
+              },
+            ),
+            SizedBox(height: AppSpacing.md),
+            BlocBuilder<ProgressCubit, ProgressState>(
+              buildWhen: (previous, current) =>
+                  previous.focusAreas != current.focusAreas,
+              builder: (context, state) =>
+                  _WeakTopicsCard(focusAreas: state.focusAreas),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
+
+/// True while the very first `progress/overview` fetch is still in flight, so
+/// there is nothing worth rendering yet and the skeleton should stand in.
+bool _isBootstrapping(ProgressState state) =>
+    state.status == ProgressStatus.loading && state.summary == null;
 
 /// Reloads the [ProgressCubit] whenever the home page becomes visible again
 /// after a nested route (track/module/practice) pops back, so the Continue
@@ -518,9 +534,7 @@ class _ContinueCard extends StatelessWidget {
                         value: masteryScore.clamp(0.0, 1.0),
                         strokeWidth: 4,
                         backgroundColor: AppColors.outlineVariant,
-                        valueColor: const AlwaysStoppedAnimation(
-                          AppColors.primary,
-                        ),
+                        valueColor: AlwaysStoppedAnimation(AppColors.primary),
                       ),
                     ),
                     Text(
@@ -682,6 +696,274 @@ class _WeakTopicRow extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Shimmering placeholder for the whole home dashboard, shown while the first
+/// `progress/overview` fetch is still in flight.
+///
+/// It reuses the real card chrome, spacing and typography, and swaps only the
+/// leaf content for [Bone]s, so the layout does not jump once the data lands.
+/// Every section is drawn even when it is conditional while loaded (the daily
+/// challenge only renders when tracks exist) for the same reason.
+class _HomeSkeleton extends StatelessWidget {
+  const _HomeSkeleton({required this.greeting});
+
+  /// The live greeting, so the header bone is the same width as the real one.
+  final String greeting;
+
+  @override
+  Widget build(BuildContext context) {
+    return Skeletonizer(
+      enabled: true,
+      child: SingleChildScrollView(
+        physics: const NeverScrollableScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.margin,
+          AppSpacing.md,
+          AppSpacing.margin,
+          AppSpacing.xl,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '$greeting, Dev.',
+              style: AppTypography.headlineLgResponsive(context)
+                  .copyWith(color: AppColors.onSurface),
+            ),
+            SizedBox(height: AppSpacing.sm),
+            Row(
+              children: [
+                Bone.square(size: 20.r, uniRadius: 6.r),
+                SizedBox(width: AppSpacing.xs),
+                Text(
+                  'Your streak: ',
+                  style: AppTypography.bodyLg.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
+                Bone(width: 24.r, height: 20.r, uniRadius: 6.r),
+                SizedBox(width: AppSpacing.xs),
+                Text(
+                  'days',
+                  style: AppTypography.bodyLg.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: AppSpacing.lg),
+            const _ActivitySkeleton(),
+            SizedBox(height: AppSpacing.md),
+            const _DailyChallengeSkeleton(),
+            SizedBox(height: AppSpacing.md),
+            const _ContinueSkeleton(),
+            SizedBox(height: AppSpacing.md),
+            const _WeakTopicsSkeleton(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActivitySkeleton extends StatelessWidget {
+  const _ActivitySkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return _HomeCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  'Activity (35 Days)',
+                  style: AppTypography.bodyLg.copyWith(
+                    color: AppColors.onSurface,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    'Readiness Levels',
+                    style: AppTypography.bodyMd.copyWith(
+                      color: AppColors.onSurfaceVariant,
+                      fontSize: 12.sp,
+                    ),
+                  ),
+                  SizedBox(height: AppSpacing.xs),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (var i = 0; i < kReadinessScale.length; i++)
+                        Padding(
+                          padding: EdgeInsets.only(left: i == 0 ? 0 : 4.r),
+                          child: Bone.square(
+                            size: 10.r,
+                            uniRadius: AppRadius.sm,
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+          SizedBox(height: AppSpacing.md),
+          const _HeatmapSkeleton(),
+        ],
+      ),
+    );
+  }
+}
+
+/// Mirrors [ActivityHeatmap]'s geometry — 7 columns of 10.r cells spaced 4.r
+/// apart — so the skeleton grid lands exactly where the real heatmap will.
+class _HeatmapSkeleton extends StatelessWidget {
+  const _HeatmapSkeleton();
+
+  static const int _days = 35;
+  static const int _columns = 7;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = (_days / _columns).ceil();
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        for (var col = 0; col < _columns; col++)
+          Column(
+            children: [
+              for (var row = 0; row < rows; row++)
+                Padding(
+                  padding: EdgeInsets.only(bottom: row == rows - 1 ? 0 : 4.r),
+                  child: Bone.square(size: 10.r, uniRadius: AppRadius.sm),
+                ),
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+class _DailyChallengeSkeleton extends StatelessWidget {
+  const _DailyChallengeSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return _HomeCard(
+      accentColor: AppColors.primary,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'DAILY CHALLENGE',
+            style: AppTypography.labelMono.copyWith(color: AppColors.primary),
+          ),
+          SizedBox(height: AppSpacing.sm),
+          Bone(width: 210.r, height: 22.r, uniRadius: 8.r),
+          SizedBox(height: 2.r),
+          Bone(width: 170.r, height: 14.r, uniRadius: 6.r),
+          SizedBox(height: AppSpacing.md),
+          Bone(width: 130.r, height: 28.r, uniRadius: AppRadius.full),
+          SizedBox(height: AppSpacing.md),
+          Bone(width: double.infinity, height: 48.r, uniRadius: AppRadius.md),
+        ],
+      ),
+    );
+  }
+}
+
+class _ContinueSkeleton extends StatelessWidget {
+  const _ContinueSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return _HomeCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'CONTINUE',
+            style: AppTypography.labelMono.copyWith(
+              color: AppColors.onSurfaceVariant,
+            ),
+          ),
+          SizedBox(height: AppSpacing.sm),
+          Bone(width: 160.r, height: 18.r, uniRadius: 6.r),
+          SizedBox(height: 2.r),
+          Bone(width: 200.r, height: 14.r, uniRadius: 6.r),
+          SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Bone.circle(size: 48.r),
+              SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Bone(height: 14.r, uniRadius: 6.r),
+              ),
+              SizedBox(width: AppSpacing.sm),
+              Bone(width: 120.r, height: 40.r, uniRadius: AppRadius.md),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WeakTopicsSkeleton extends StatelessWidget {
+  const _WeakTopicsSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return _HomeCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'WEAK TOPICS',
+            style: AppTypography.labelMono.copyWith(
+              color: AppColors.onSurfaceVariant,
+            ),
+          ),
+          SizedBox(height: AppSpacing.md),
+          for (var i = 0; i < 2; i++)
+            Padding(
+              padding: EdgeInsets.only(bottom: i == 1 ? 0 : AppSpacing.sm),
+              child: Container(
+                width: double.infinity,
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.sm,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceContainerHigh,
+                  borderRadius: AppRadius.radiusFull,
+                ),
+                child: Row(
+                  children: [
+                    Bone.circle(size: 8.r),
+                    SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Bone(height: 14.r, uniRadius: 6.r),
+                    ),
+                    SizedBox(width: AppSpacing.sm),
+                    Bone(width: 34.r, height: 12.r, uniRadius: 4.r),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

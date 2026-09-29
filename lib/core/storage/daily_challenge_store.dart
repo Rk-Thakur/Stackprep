@@ -8,8 +8,9 @@ class DailyChallengeStore {
 
   final SharedPreferences _prefs;
 
-  static String _keyFor(DateTime day) =>
-      'daily_challenge_done_${_dateKey(day)}';
+  static const String _keyPrefix = 'daily_challenge_done_';
+
+  static String _keyFor(DateTime day) => '$_keyPrefix${_dateKey(day)}';
 
   bool isDoneToday([DateTime? now]) {
     final day = now ?? DateTime.now();
@@ -19,6 +20,18 @@ class DailyChallengeStore {
   Future<void> markDoneToday([DateTime? now]) async {
     final day = now ?? DateTime.now();
     await _prefs.setBool(_keyFor(day), true);
+  }
+
+  /// Drops every recorded completion day. Used when an account is deleted,
+  /// since the history belongs to the person rather than the device.
+  Future<void> clearHistory() async {
+    final keys = _prefs
+        .getKeys()
+        .where((key) => key.startsWith(_keyPrefix))
+        .toList(growable: false);
+    for (final key in keys) {
+      await _prefs.remove(key);
+    }
   }
 
   static String _dateKey(DateTime date) {

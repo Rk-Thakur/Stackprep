@@ -15,6 +15,7 @@ import '../widgets/boot_terminal.dart';
 import '../widgets/hero_mark.dart';
 import '../widgets/splash_background.dart';
 import '../widgets/system_start_button.dart';
+import '../../../../core/theme/app_theme_scope.dart';
 import '../../../../injection_container.dart' show sl;
 
 /// The app's boot screen: ambient shader-style backdrop, a rotating
@@ -27,8 +28,7 @@ class SplashPage extends StatefulWidget {
   State<SplashPage> createState() => _SplashPageState();
 }
 
-class _SplashPageState extends State<SplashPage>
-    with TickerProviderStateMixin {
+class _SplashPageState extends State<SplashPage> with TickerProviderStateMixin {
   late final AnimationController _bgController = AnimationController(
     vsync: this,
     duration: const Duration(seconds: 8),
@@ -58,8 +58,8 @@ class _SplashPageState extends State<SplashPage>
       if (!mounted) return;
       final authenticated = sl<AuthRemoteDataSource>().currentUser != null;
       if (authenticated) {
-        final onboardingCompleted =
-            sl<OnboardingLocalDataSource>().isOnboardingCompleted();
+        final onboardingCompleted = sl<OnboardingLocalDataSource>()
+            .isOnboardingCompleted();
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
             builder: (_) => onboardingCompleted
@@ -83,93 +83,94 @@ class _SplashPageState extends State<SplashPage>
   }
 
   void _start() {
-    Navigator.of(
-      context,
-    ).pushReplacement(MaterialPageRoute(builder: (_) => const AuthPage()));
+    Navigator.of(context)
+        .pushReplacement(MaterialPageRoute(builder: (_) => const AuthPage()));
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.surface,
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: AnimatedBuilder(
-              animation: _bgController,
-              builder: (context, _) =>
-                  SplashBackground(progress: _bgController.value),
+    return Themed(
+      child: Scaffold(
+        backgroundColor: AppColors.surface,
+        body: Stack(
+          children: [
+            Positioned.fill(
+              child: AnimatedBuilder(
+                animation: _bgController,
+                builder: (context, _) =>
+                    SplashBackground(progress: _bgController.value),
+              ),
             ),
-          ),
-          SafeArea(
-            child: Column(
-              children: [
-                SizedBox(height: AppSpacing.xl),
-                AnimatedBuilder(
-                  animation: _titleController,
-                  builder: (context, child) {
-                    final t = _titleController.value;
-                    final decay = 1 - t;
-                    final dx = sin(t * 26) * decay * 10;
-                    final rot = sin(t * 20) * decay * 0.06;
-                    return Opacity(
-                      opacity: (t / 0.25).clamp(0.0, 1.0),
-                      child: Transform.translate(
-                        offset: Offset(dx, 0),
-                        child: Transform.rotate(angle: rot, child: child),
+            SafeArea(
+              child: Column(
+                children: [
+                  SizedBox(height: AppSpacing.xl),
+                  AnimatedBuilder(
+                    animation: _titleController,
+                    builder: (context, child) {
+                      final t = _titleController.value;
+                      final decay = 1 - t;
+                      final dx = sin(t * 26) * decay * 10;
+                      final rot = sin(t * 20) * decay * 0.06;
+                      return Opacity(
+                        opacity: (t / 0.25).clamp(0.0, 1.0),
+                        child: Transform.translate(
+                          offset: Offset(dx, 0),
+                          child: Transform.rotate(angle: rot, child: child),
+                        ),
+                      );
+                    },
+                    child: Text(
+                      'STACKPREP',
+                      style: AppTypography.headlineLg.copyWith(
+                        color: AppColors.primaryContainer,
+                        letterSpacing: 2,
                       ),
-                    );
-                  },
-                  child: Text(
-                    'STACKPREP',
-                    style: AppTypography.headlineLg.copyWith(
-                      color: AppColors.primaryContainer,
-                      letterSpacing: 2,
                     ),
                   ),
-                ),
-                Expanded(
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        AnimatedBuilder(
-                          animation: _heroController,
-                          builder: (context, _) => HeroMark(
-                            progress: _heroController.value,
-                            size: 240.r,
+                  Expanded(
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          AnimatedBuilder(
+                            animation: _heroController,
+                            builder: (context, _) => HeroMark(
+                              progress: _heroController.value,
+                              size: 240.r,
+                            ),
                           ),
-                        ),
-                        SizedBox(height: AppSpacing.xl),
-                        AnimatedBuilder(
-                          animation: _bootController,
-                          builder: (context, _) =>
-                              BootTerminal(progress: _bootController.value),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: EdgeInsets.only(bottom: AppSpacing.xl),
-                  child: AnimatedOpacity(
-                    opacity: _canStart ? 1 : 0,
-                    duration: const Duration(milliseconds: 600),
-                    child: AnimatedSlide(
-                      offset: _canStart ? Offset.zero : const Offset(0, 0.06),
-                      duration: const Duration(milliseconds: 600),
-                      curve: Curves.easeOut,
-                      child: IgnorePointer(
-                        ignoring: !_canStart,
-                        child: SystemStartButton(onTap: _start),
+                          SizedBox(height: AppSpacing.xl),
+                          AnimatedBuilder(
+                            animation: _bootController,
+                            builder: (context, _) =>
+                                BootTerminal(progress: _bootController.value),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                ),
-              ],
+                  Padding(
+                    padding: EdgeInsets.only(bottom: AppSpacing.xl),
+                    child: AnimatedOpacity(
+                      opacity: _canStart ? 1 : 0,
+                      duration: const Duration(milliseconds: 600),
+                      child: AnimatedSlide(
+                        offset: _canStart ? Offset.zero : const Offset(0, 0.06),
+                        duration: const Duration(milliseconds: 600),
+                        curve: Curves.easeOut,
+                        child: IgnorePointer(
+                          ignoring: !_canStart,
+                          child: SystemStartButton(onTap: _start),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

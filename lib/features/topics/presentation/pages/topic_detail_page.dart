@@ -15,6 +15,7 @@ import '../../../onboarding/domain/entities/stack_track.dart';
 import 'flashcard_page.dart';
 import 'module_detail_page.dart';
 import '../../../practice/presentation/pages/practice_session_page.dart';
+import '../../../../core/theme/app_theme_scope.dart';
 
 class TopicDetailPage extends StatefulWidget {
   const TopicDetailPage({super.key, required this.trackId});
@@ -63,45 +64,47 @@ class _TopicDetailPageState extends State<TopicDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.surface,
-      body: SafeArea(
-        child: Column(
-          children: [
-            AppTopBar(
-              trailing: InkWell(
-                onTap: () => Navigator.of(context).maybePop(),
-                borderRadius: AppRadius.radiusSm,
-                child: Padding(
-                  padding: EdgeInsets.all(4.r),
-                  child: Icon(
-                    Icons.arrow_back_rounded,
-                    size: 22.r,
-                    color: AppColors.primary,
+    return Themed(
+      child: Scaffold(
+        backgroundColor: AppColors.surface,
+        body: SafeArea(
+          child: Column(
+            children: [
+              AppTopBar(
+                trailing: InkWell(
+                  onTap: () => Navigator.of(context).maybePop(),
+                  borderRadius: AppRadius.radiusSm,
+                  child: Padding(
+                    padding: EdgeInsets.all(4.r),
+                    child: Icon(
+                      Icons.arrow_back_rounded,
+                      size: 22.r,
+                      color: AppColors.primary,
+                    ),
                   ),
                 ),
               ),
-            ),
-            Expanded(
-              child: _loading
-                  ? const _TopicDetailSkeleton()
-                  : _modules.isEmpty
-                      ? Center(
-                          child: Text(
-                            'No modules in $_trackName yet.',
-                            style: AppTypography.bodyLg.copyWith(
-                              color: AppColors.onSurfaceVariant,
-                            ),
+              Expanded(
+                child: _loading
+                    ? const _TopicDetailSkeleton()
+                    : _modules.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No modules in $_trackName yet.',
+                          style: AppTypography.bodyLg.copyWith(
+                            color: AppColors.onSurfaceVariant,
                           ),
-                        )
-                      : _TopicDetailBody(
-                          trackId: widget.trackId,
-                          trackName: _trackName,
-                          trackDescription: _trackDescription,
-                          modules: _modules,
                         ),
-            ),
-          ],
+                      )
+                    : _TopicDetailBody(
+                        trackId: widget.trackId,
+                        trackName: _trackName,
+                        trackDescription: _trackDescription,
+                        modules: _modules,
+                      ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -130,7 +133,7 @@ class _TopicDetailSkeleton extends StatelessWidget {
           children: [
             Container(
               padding: EdgeInsets.only(bottom: AppSpacing.xl),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 border: Border(
                   bottom: BorderSide(color: AppColors.outlineVariant),
                 ),
@@ -274,7 +277,7 @@ class _TopicDetailBody extends StatelessWidget {
           // Header: track pill, title, description, action buttons.
           Container(
             padding: EdgeInsets.only(bottom: AppSpacing.xl),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               border: Border(
                 bottom: BorderSide(color: AppColors.outlineVariant),
               ),
@@ -286,9 +289,8 @@ class _TopicDetailBody extends StatelessWidget {
                 SizedBox(height: AppSpacing.sm),
                 Text(
                   trackName,
-                  style: AppTypography.headlineLgResponsive(
-                    context,
-                  ).copyWith(color: AppColors.onSurface),
+                  style: AppTypography.headlineLgResponsive(context)
+                      .copyWith(color: AppColors.onSurface),
                 ),
                 if (trackDescription.isNotEmpty) ...[
                   SizedBox(height: 8.r),
@@ -309,9 +311,8 @@ class _TopicDetailBody extends StatelessWidget {
                         variant: _ActionButtonVariant.filled,
                         onTap: () => Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => PracticeSessionPage(
-                              topicCode: trackId,
-                            ),
+                            builder: (_) =>
+                                PracticeSessionPage(topicCode: trackId),
                           ),
                         ),
                       ),
@@ -339,7 +340,7 @@ class _TopicDetailBody extends StatelessWidget {
           // Sub-topics & challenges.
           Container(
             padding: EdgeInsets.only(bottom: AppSpacing.sm),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               border: Border(
                 bottom: BorderSide(color: AppColors.outlineVariant),
               ),
@@ -422,9 +423,7 @@ class _TrackPill extends StatelessWidget {
           SizedBox(width: AppSpacing.xs),
           Text(
             track.name.toUpperCase(),
-            style: AppTypography.labelMono.copyWith(
-              color: AppColors.onSurface,
-            ),
+            style: AppTypography.labelMono.copyWith(color: AppColors.onSurface),
           ),
         ],
       ),
@@ -469,9 +468,7 @@ class _ActionButton extends StatelessWidget {
           ),
           decoration: BoxDecoration(
             borderRadius: AppRadius.radiusBase,
-            border: borderColor != null
-                ? Border.all(color: borderColor)
-                : null,
+            border: borderColor != null ? Border.all(color: borderColor) : null,
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,

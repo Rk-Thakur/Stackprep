@@ -12,14 +12,25 @@ abstract interface class AuthRemoteDataSource {
 
   fb.User? get currentUser;
 
-  Future<fb.User> signUpWithEmail({required String email, required String password});
+  Future<fb.User> signUpWithEmail({
+    required String email,
+    required String password,
+  });
 
-  Future<fb.User> signInWithEmail({required String email, required String password});
+  Future<fb.User> signInWithEmail({
+    required String email,
+    required String password,
+  });
 
   /// Returns null when the user cancels the Google account picker.
   Future<fb.User?> signInWithGoogle();
 
   Future<void> signOut();
+
+  /// Erases the signed-in account for good: the `users/{uid}` document and all
+  /// of its subcollections, then the Firebase Auth record itself. Throws
+  /// [ServerException] if any step fails.
+  Future<void> deleteAccount();
 }
 
 class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
@@ -101,7 +112,9 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       return user;
     } on GoogleSignInException catch (e) {
       if (e.code == GoogleSignInExceptionCode.canceled) return null;
-      throw ServerException('Google sign-in failed: ${e.description ?? e.code}');
+      throw ServerException(
+        'Google sign-in failed: ${e.description ?? e.code}',
+      );
     } on fb.FirebaseAuthException catch (e) {
       throw ServerException(_messageForCode(e.code));
     }
@@ -112,6 +125,69 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     await _firebaseAuth.signOut();
     if (_googleSignInInit != null) {
       await GoogleSignIn.instance.signOut();
+    }
+  }
+
+  /// The subcollections hanging off `users/{uid}` that hold user-owned data.
+  /// `progress/overview` is a single fixed document; the rest grow per day or
+  /// per attempt, which is why they need paging rather than a known id.
+  static const List<String> _userSubcollections = [
+    'progress',
+    'moduleProgress',
+    'activityDaily',
+    'attempts',
+  ];
+
+  /// Firestore caps a batch at 500 operations, so deletes are chunked to stay
+  /// well under it.
+  static const int _deleteBatchSize = 400;
+
+  @override
+  Future<void> deleteAccount() async {
+    final user = _firebaseAuth.currentUser;
+    if (user == null) {
+      throw const ServerException('There is no signed-in account to delete.');
+    }
+
+    try {
+      // Firestore has no cascading delete and this client version has no
+      // recursiveDelete helper, so every subcollection is emptied first. This
+      // deliberately leaves the shared `tracks/` catalog alone: those documents
+      // belong to the curriculum, not to this user.
+      final userDoc = _firestore.collection('users').doc(user.uid);
+      for (final name in _userSubcollections) {
+        await _deleteSubcollection(userDoc.collection(name));
+      }
+      await userDoc.delete();
+
+      // Last, because it ends the session the Firestore rules authenticate
+      // against, and because leaving the Auth record behind would let the same
+      // sign-in recreate `users/{uid}` via _pushUserToFirestore.
+      await user.delete();
+    } on fb.FirebaseAuthException catch (e) {
+      throw ServerException(_messageForCode(e.code));
+    } on FirebaseException {
+      throw const ServerException(
+        'Could not delete your data. Check your connection and try again.',
+      );
+    }
+
+    if (_googleSignInInit != null) {
+      await GoogleSignIn.instance.signOut();
+    }
+  }
+
+  Future<void> _deleteSubcollection(
+    Query<Map<String, dynamic>> collection,
+  ) async {
+    final snapshot = await collection.get();
+    final docs = snapshot.docs;
+    for (var i = 0; i < docs.length; i += _deleteBatchSize) {
+      final batch = _firestore.batch();
+      for (final doc in docs.skip(i).take(_deleteBatchSize)) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
     }
   }
 
@@ -133,10 +209,10 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
             : 'unknown',
         'updatedAt': FieldValue.serverTimestamp(),
       };
-      await _firestore.collection('users').doc(user.uid).set(
-        data,
-        SetOptions(merge: true),
-      );
+      await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .set(data, SetOptions(merge: true));
     } on FirebaseException {
       // Deliberately swallow — auth still succeeded.
     }
@@ -162,6 +238,8 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         return 'Network error. Check your connection and try again.';
       case 'too-many-requests':
         return 'Too many attempts. Please try again later.';
+      case 'requires-recent-login':
+        return 'For your security, sign in again before deleting your account.';
       default:
         return 'Authentication failed ($code).';
     }

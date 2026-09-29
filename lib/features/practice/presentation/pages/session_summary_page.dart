@@ -8,6 +8,7 @@ import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/app_top_bar.dart';
 import '../bloc/practice_session_state.dart';
 import 'practice_session_page.dart';
+import '../../../../core/theme/app_theme_scope.dart';
 
 class _CategoryBreakdown {
   const _CategoryBreakdown({
@@ -99,9 +100,7 @@ class SessionSummaryPage extends StatelessWidget {
       );
     }
     if (results.length < totalQuestions) {
-      lines.add(
-        _LogLine('Q_SKIPPED:', '${totalQuestions - results.length}'),
-      );
+      lines.add(_LogLine('Q_SKIPPED:', '${totalQuestions - results.length}'));
     }
     lines.add(_LogLine('SESSION_END: ${'$_percent%'}', 'SUCCESS'));
     return lines;
@@ -109,186 +108,189 @@ class SessionSummaryPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            AppTopBar(
-              trailing: Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm,
-                  vertical: 4.r,
-                ),
-                decoration: BoxDecoration(
-                  border: Border.all(color: AppColors.outlineVariant),
-                  borderRadius: AppRadius.radiusSm,
-                ),
-                child: Text(
-                  '[SYSTEM.STATUS: OK]',
-                  style: AppTypography.labelMono.copyWith(
-                    color: AppColors.onSurfaceVariant,
-                    fontSize: 10.sp,
+    return Themed(
+      child: Scaffold(
+        body: SafeArea(
+          child: Column(
+            children: [
+              AppTopBar(
+                trailing: Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                    vertical: 4.r,
+                  ),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: AppColors.outlineVariant),
+                    borderRadius: AppRadius.radiusSm,
+                  ),
+                  child: Text(
+                    '[SYSTEM.STATUS: OK]',
+                    style: AppTypography.labelMono.copyWith(
+                      color: AppColors.onSurfaceVariant,
+                      fontSize: 10.sp,
+                    ),
                   ),
                 ),
               ),
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(
-                  AppSpacing.margin,
-                  AppSpacing.md,
-                  AppSpacing.margin,
-                  AppSpacing.lg,
-                ),
-                child: Column(
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 40.r,
-                        height: 4.r,
-                        decoration: BoxDecoration(
-                          color: AppColors.outlineVariant,
-                          borderRadius: AppRadius.radiusFull,
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(
+                    AppSpacing.margin,
+                    AppSpacing.md,
+                    AppSpacing.margin,
+                    AppSpacing.lg,
+                  ),
+                  child: Column(
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 40.r,
+                          height: 4.r,
+                          decoration: BoxDecoration(
+                            color: AppColors.outlineVariant,
+                            borderRadius: AppRadius.radiusFull,
+                          ),
                         ),
                       ),
-                    ),
-                    SizedBox(height: AppSpacing.lg),
-                    Text(
-                      'Session Summary',
-                      style: AppTypography.headlineMd.copyWith(
-                        color: AppColors.primary,
-                        fontSize: 20.sp,
+                      SizedBox(height: AppSpacing.lg),
+                      Text(
+                        'Session Summary',
+                        style: AppTypography.headlineMd.copyWith(
+                          color: AppColors.primary,
+                          fontSize: 20.sp,
+                        ),
                       ),
-                    ),
-                    SizedBox(height: AppSpacing.lg),
-                    SizedBox(
-                      width: 168.r,
-                      height: 168.r,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          SizedBox(
-                            width: 168.r,
-                            height: 168.r,
-                            child: CircularProgressIndicator(
-                              value: _percent / 100,
-                              strokeWidth: 8,
-                              backgroundColor: AppColors.surfaceContainerHigh,
-                              valueColor: const AlwaysStoppedAnimation(
-                                AppColors.primary,
+                      SizedBox(height: AppSpacing.lg),
+                      SizedBox(
+                        width: 168.r,
+                        height: 168.r,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            SizedBox(
+                              width: 168.r,
+                              height: 168.r,
+                              child: CircularProgressIndicator(
+                                value: _percent / 100,
+                                strokeWidth: 8,
+                                backgroundColor: AppColors.surfaceContainerHigh,
+                                valueColor: AlwaysStoppedAnimation(
+                                  AppColors.primary,
+                                ),
                               ),
                             ),
+                            Text(
+                              '$_percent%',
+                              style: AppTypography.headlineLg.copyWith(
+                                color: AppColors.onSurface,
+                                fontSize: 40.sp,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: AppSpacing.sm),
+                      Text(
+                        'Final Score',
+                        style: AppTypography.bodyLg.copyWith(
+                          color: AppColors.primary,
+                        ),
+                      ),
+                      SizedBox(height: AppSpacing.xl),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Breakdown',
+                          style: AppTypography.headlineMd.copyWith(
+                            color: AppColors.onSurface,
+                            fontSize: 19.sp,
                           ),
-                          Text(
-                            '$_percent%',
-                            style: AppTypography.headlineLg.copyWith(
-                              color: AppColors.onSurface,
-                              fontSize: 40.sp,
+                        ),
+                      ),
+                      SizedBox(height: AppSpacing.md),
+                      for (var i = 0; i < _breakdown.length; i++)
+                        Padding(
+                          padding: EdgeInsets.only(
+                            bottom: i == _breakdown.length - 1
+                                ? 0
+                                : AppSpacing.sm,
+                          ),
+                          child: _CategoryCard(breakdown: _breakdown[i]),
+                        ),
+                      SizedBox(height: AppSpacing.xl),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Session Logs',
+                          style: AppTypography.headlineMd.copyWith(
+                            color: AppColors.onSurface,
+                            fontSize: 19.sp,
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: AppSpacing.md),
+                      _SessionLogBox(lines: _logLines),
+                    ],
+                  ),
+                ),
+              ),
+              Container(height: 1, color: AppColors.outlineVariant),
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.margin,
+                  AppSpacing.sm,
+                  AppSpacing.margin,
+                  AppSpacing.md,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => Navigator.of(context).pushReplacement(
+                          MaterialPageRoute(
+                            builder: (_) => PracticeSessionPage(
+                              topicCode: topicCode,
+                              moduleId: moduleId,
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                    SizedBox(height: AppSpacing.sm),
-                    Text(
-                      'Final Score',
-                      style: AppTypography.bodyLg.copyWith(
-                        color: AppColors.primary,
-                      ),
-                    ),
-                    SizedBox(height: AppSpacing.xl),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Breakdown',
-                        style: AppTypography.headlineMd.copyWith(
-                          color: AppColors.onSurface,
-                          fontSize: 19.sp,
+                        ),
+                        icon: Icon(Icons.refresh_rounded, size: 18.r),
+                        label: const Text('Retry Session'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.onSurface,
+                          side: BorderSide(color: AppColors.outlineVariant),
+                          padding: EdgeInsets.symmetric(vertical: 14.r),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: AppRadius.radiusMd,
+                          ),
                         ),
                       ),
                     ),
-                    SizedBox(height: AppSpacing.md),
-                    for (var i = 0; i < _breakdown.length; i++)
-                      Padding(
-                        padding: EdgeInsets.only(
-                          bottom: i == _breakdown.length - 1
-                              ? 0
-                              : AppSpacing.sm,
+                    SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: Icon(
+                          Icons.check_circle_outline_rounded,
+                          size: 18.r,
                         ),
-                        child: _CategoryCard(breakdown: _breakdown[i]),
-                      ),
-                    SizedBox(height: AppSpacing.xl),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Session Logs',
-                        style: AppTypography.headlineMd.copyWith(
-                          color: AppColors.onSurface,
-                          fontSize: 19.sp,
+                        label: const Text('Done'),
+                        style: ElevatedButton.styleFrom(
+                          padding: EdgeInsets.symmetric(vertical: 14.r),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: AppRadius.radiusMd,
+                          ),
+                          textStyle: AppTypography.bodyLg.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                     ),
-                    SizedBox(height: AppSpacing.md),
-                    _SessionLogBox(lines: _logLines),
                   ],
                 ),
               ),
-            ),
-            Container(height: 1, color: AppColors.outlineVariant),
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                AppSpacing.margin,
-                AppSpacing.sm,
-                AppSpacing.margin,
-                AppSpacing.md,
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(
-                          builder: (_) => PracticeSessionPage(
-                            topicCode: topicCode,
-                            moduleId: moduleId,
-                          ),
-                        ),
-                      ),
-                      icon: Icon(Icons.refresh_rounded, size: 18.r),
-                      label: const Text('Retry Session'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.onSurface,
-                        side: const BorderSide(
-                          color: AppColors.outlineVariant,
-                        ),
-                        padding: EdgeInsets.symmetric(vertical: 14.r),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: AppRadius.radiusMd,
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: Icon(Icons.check_circle_outline_rounded, size: 18.r),
-                      label: const Text('Done'),
-                      style: ElevatedButton.styleFrom(
-                        padding: EdgeInsets.symmetric(vertical: 14.r),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: AppRadius.radiusMd,
-                        ),
-                        textStyle: AppTypography.bodyLg.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -320,7 +322,7 @@ class _CategoryCard extends StatelessWidget {
               top: 0,
               bottom: 0,
               width: 4.r,
-              child: const ColoredBox(color: AppColors.primary),
+              child: ColoredBox(color: AppColors.primary),
             ),
           Padding(
             padding: EdgeInsets.all(AppSpacing.md),

@@ -1493,7 +1493,7 @@ class _ContentTabState extends State<_ContentTab> {
                           label: const Text('Heading'),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppColors.primary,
-                            side: const BorderSide(color: AppColors.primary),
+                            side: BorderSide(color: AppColors.primary),
                             shape: RoundedRectangleBorder(
                               borderRadius: AppRadius.radiusMd,
                             ),
@@ -1508,7 +1508,7 @@ class _ContentTabState extends State<_ContentTab> {
                           label: const Text('Text'),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppColors.primary,
-                            side: const BorderSide(color: AppColors.primary),
+                            side: BorderSide(color: AppColors.primary),
                             shape: RoundedRectangleBorder(
                               borderRadius: AppRadius.radiusMd,
                             ),
@@ -1523,7 +1523,7 @@ class _ContentTabState extends State<_ContentTab> {
                           label: const Text('Code'),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppColors.primary,
-                            side: const BorderSide(color: AppColors.primary),
+                            side: BorderSide(color: AppColors.primary),
                             shape: RoundedRectangleBorder(
                               borderRadius: AppRadius.radiusMd,
                             ),
@@ -1598,15 +1598,15 @@ class _ContentTextField extends StatelessWidget {
         ),
         border: OutlineInputBorder(
           borderRadius: AppRadius.radiusMd,
-          borderSide: const BorderSide(color: AppColors.outlineVariant),
+          borderSide: BorderSide(color: AppColors.outlineVariant),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: AppRadius.radiusMd,
-          borderSide: const BorderSide(color: AppColors.outlineVariant),
+          borderSide: BorderSide(color: AppColors.outlineVariant),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: AppRadius.radiusMd,
-          borderSide: const BorderSide(color: AppColors.primary),
+          borderSide: BorderSide(color: AppColors.primary),
         ),
       ),
     );
@@ -3020,19 +3020,19 @@ class _Field extends StatelessWidget {
         ),
         border: OutlineInputBorder(
           borderRadius: AppRadius.radiusMd,
-          borderSide: const BorderSide(color: AppColors.outlineVariant),
+          borderSide: BorderSide(color: AppColors.outlineVariant),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: AppRadius.radiusMd,
-          borderSide: const BorderSide(color: AppColors.outlineVariant),
+          borderSide: BorderSide(color: AppColors.outlineVariant),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: AppRadius.radiusMd,
-          borderSide: const BorderSide(color: AppColors.primary),
+          borderSide: BorderSide(color: AppColors.primary),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: AppRadius.radiusMd,
-          borderSide: const BorderSide(color: AppColors.error),
+          borderSide: BorderSide(color: AppColors.error),
         ),
       ),
     );

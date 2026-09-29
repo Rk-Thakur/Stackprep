@@ -32,9 +32,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthGoogleSignInRequested>(_onGoogleSignInRequested);
     on<AuthSignOutRequested>(_onSignOutRequested);
 
-    _userSubscription = _observeAuthState(const NoParams()).listen(
-      (user) => add(AuthUserChanged(user)),
-    );
+    _userSubscription = _observeAuthState(const NoParams())
+        .listen((user) => add(AuthUserChanged(user)));
   }
 
   final ObserveAuthState _observeAuthState;
@@ -116,10 +115,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         await _signOut(const NoParams());
         _creatingAccount = false;
         emit(
-          state.copyWith(
-            formStatus: AuthFormStatus.idle,
-            justSignedUp: true,
-          ),
+          state.copyWith(formStatus: AuthFormStatus.idle, justSignedUp: true),
         );
       },
     );

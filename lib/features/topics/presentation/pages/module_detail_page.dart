@@ -14,6 +14,7 @@ import '../../../../core/widgets/code_block.dart';
 import '../../../../injection_container.dart';
 import '../../../practice/presentation/pages/practice_session_page.dart';
 import '../../../progress/domain/usecases/mark_module_viewed.dart';
+import '../../../../core/theme/app_theme_scope.dart';
 
 class ModuleDetailPage extends StatefulWidget {
   const ModuleDetailPage({
@@ -68,44 +69,46 @@ class _ModuleDetailPageState extends State<ModuleDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.surface,
-      body: SafeArea(
-        child: Column(
-          children: [
-            AppTopBar(
-              trailing: InkWell(
-                onTap: () => Navigator.of(context).maybePop(),
-                borderRadius: AppRadius.radiusSm,
-                child: Padding(
-                  padding: EdgeInsets.all(4.r),
-                  child: Icon(
-                    Icons.arrow_back_rounded,
-                    size: 22.r,
-                    color: AppColors.onSurface,
+    return Themed(
+      child: Scaffold(
+        backgroundColor: AppColors.surface,
+        body: SafeArea(
+          child: Column(
+            children: [
+              AppTopBar(
+                trailing: InkWell(
+                  onTap: () => Navigator.of(context).maybePop(),
+                  borderRadius: AppRadius.radiusSm,
+                  child: Padding(
+                    padding: EdgeInsets.all(4.r),
+                    child: Icon(
+                      Icons.arrow_back_rounded,
+                      size: 22.r,
+                      color: AppColors.onSurface,
+                    ),
                   ),
                 ),
               ),
-            ),
-            Expanded(
-              child: _loading
-                  ? const _ModuleDetailSkeleton()
-                  : _module == null
-                      ? Center(
-                          child: Text(
-                            'Module not found.',
-                            style: AppTypography.bodyLg.copyWith(
-                              color: AppColors.onSurfaceVariant,
-                            ),
+              Expanded(
+                child: _loading
+                    ? const _ModuleDetailSkeleton()
+                    : _module == null
+                    ? Center(
+                        child: Text(
+                          'Module not found.',
+                          style: AppTypography.bodyLg.copyWith(
+                            color: AppColors.onSurfaceVariant,
                           ),
-                        )
-                      : _ModuleContent(
-                          trackId: widget.trackId,
-                          moduleId: widget.moduleId,
-                          module: _module!,
                         ),
-            ),
-          ],
+                      )
+                    : _ModuleContent(
+                        trackId: widget.trackId,
+                        moduleId: widget.moduleId,
+                        module: _module!,
+                      ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -134,9 +137,8 @@ class _ModuleDetailSkeleton extends StatelessWidget {
           children: [
             Text(
               'Module title placeholder',
-              style: AppTypography.headlineLgResponsive(
-                context,
-              ).copyWith(color: AppColors.onSurface),
+              style: AppTypography.headlineLgResponsive(context)
+                  .copyWith(color: AppColors.onSurface),
             ),
             SizedBox(height: AppSpacing.sm),
             Text(
@@ -234,9 +236,8 @@ class _ModuleContent extends StatelessWidget {
         children: [
           Text(
             title,
-            style: AppTypography.headlineLgResponsive(context).copyWith(
-              color: AppColors.onSurface,
-            ),
+            style: AppTypography.headlineLgResponsive(context)
+                .copyWith(color: AppColors.onSurface),
           ),
           if (description.isNotEmpty) ...[
             SizedBox(height: AppSpacing.sm),
@@ -360,11 +361,7 @@ class _ContentBlockWidget extends StatelessWidget {
             ),
           ),
           SizedBox(height: AppSpacing.sm),
-          CodeBlock(
-            header: language,
-            language: language,
-            lines: lines,
-          ),
+          CodeBlock(header: language, language: language, lines: lines),
         ],
       );
     }

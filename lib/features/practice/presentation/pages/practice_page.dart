@@ -16,6 +16,7 @@ import '../../../progress/domain/entities/track_competency.dart';
 import '../../../progress/domain/usecases/get_progress_overview.dart';
 import '../../../progress/presentation/pages/progress_page.dart';
 import '../../../topics/presentation/pages/topic_detail_page.dart';
+import '../../../../core/theme/app_theme_scope.dart';
 
 /// Practice tab: pick a track to drill, or jump into a cross-platform
 /// concept that spans every stack.
@@ -87,110 +88,112 @@ class _PracticePageState extends State<PracticePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            AppTopBar(showBottomDivider: true),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(
-                  AppSpacing.margin,
-                  AppSpacing.md,
-                  AppSpacing.margin,
-                  AppSpacing.xl,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Technical Tracks',
-                      style: AppTypography.headlineLgResponsive(context)
-                          .copyWith(color: AppColors.onSurface),
-                    ),
-                    SizedBox(height: AppSpacing.xs),
-                    Text(
-                      'Select a domain to begin mastering technical '
-                      'interview patterns.',
-                      style: AppTypography.bodyLg.copyWith(
-                        color: AppColors.onSurfaceVariant,
+    return Themed(
+      child: Scaffold(
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              AppTopBar(showBottomDivider: true),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(
+                    AppSpacing.margin,
+                    AppSpacing.md,
+                    AppSpacing.margin,
+                    AppSpacing.xl,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Technical Tracks',
+                        style: AppTypography.headlineLgResponsive(context)
+                            .copyWith(color: AppColors.onSurface),
                       ),
-                    ),
-                    SizedBox(height: AppSpacing.lg),
-                    _SearchField(controller: _searchController),
-                    SizedBox(height: AppSpacing.lg),
-                    if (_loading)
-                      const _TrackListSkeleton()
-                    else if (_filteredTracks.isEmpty)
-                      Center(
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(
-                            vertical: AppSpacing.lg,
-                          ),
-                          child: Text(
-                            _query.isEmpty
-                                ? 'No tracks available.'
-                                : 'No tracks match your search.',
-                            style: AppTypography.bodyMd.copyWith(
-                              color: AppColors.onSurfaceVariant,
+                      SizedBox(height: AppSpacing.xs),
+                      Text(
+                        'Select a domain to begin mastering technical '
+                        'interview patterns.',
+                        style: AppTypography.bodyLg.copyWith(
+                          color: AppColors.onSurfaceVariant,
+                        ),
+                      ),
+                      SizedBox(height: AppSpacing.lg),
+                      _SearchField(controller: _searchController),
+                      SizedBox(height: AppSpacing.lg),
+                      if (_loading)
+                        const _TrackListSkeleton()
+                      else if (_filteredTracks.isEmpty)
+                        Center(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                              vertical: AppSpacing.lg,
+                            ),
+                            child: Text(
+                              _query.isEmpty
+                                  ? 'No tracks available.'
+                                  : 'No tracks match your search.',
+                              style: AppTypography.bodyMd.copyWith(
+                                color: AppColors.onSurfaceVariant,
+                              ),
                             ),
                           ),
-                        ),
-                      )
-                    else
-                      for (var i = 0; i < _filteredTracks.length; i++)
-                        Padding(
-                          padding: EdgeInsets.only(
-                            bottom: i == _filteredTracks.length - 1
-                                ? 0
-                                : AppSpacing.md,
-                          ),
-                          child: _FirestoreTrackCard(
-                            track: _filteredTracks[i],
-                            competency:
-                                _competencyByTrack[_filteredTracks[i]['id']
-                                    as String],
-                            onTap: () async {
-                              await Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => TopicDetailPage(
-                                    trackId:
-                                        _filteredTracks[i]['id'] as String,
+                        )
+                      else
+                        for (var i = 0; i < _filteredTracks.length; i++)
+                          Padding(
+                            padding: EdgeInsets.only(
+                              bottom: i == _filteredTracks.length - 1
+                                  ? 0
+                                  : AppSpacing.md,
+                            ),
+                            child: _FirestoreTrackCard(
+                              track: _filteredTracks[i],
+                              competency:
+                                  _competencyByTrack[_filteredTracks[i]['id']
+                                      as String],
+                              onTap: () async {
+                                await Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => TopicDetailPage(
+                                      trackId:
+                                          _filteredTracks[i]['id'] as String,
+                                    ),
                                   ),
-                                ),
-                              );
-                              // Refresh competency indicators after returning
-                              // from the track so progress is up to date.
-                              if (mounted) _loadTracks();
-                            },
+                                );
+                                // Refresh competency indicators after returning
+                                // from the track so progress is up to date.
+                                if (mounted) _loadTracks();
+                              },
+                            ),
                           ),
-                        ),
-                    SizedBox(height: AppSpacing.lg),
-                  ],
+                      SizedBox(height: AppSpacing.lg),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            AppBottomNavBar(
-              currentIndex: 1,
-              onTap: (i) {
-                if (i == 1) return;
-                if (i == 0) {
-                  Navigator.of(context).popUntil((route) => route.isFirst);
-                  return;
-                }
-                if (i == 2) {
+              AppBottomNavBar(
+                currentIndex: 1,
+                onTap: (i) {
+                  if (i == 1) return;
+                  if (i == 0) {
+                    Navigator.of(context).popUntil((route) => route.isFirst);
+                    return;
+                  }
+                  if (i == 2) {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const ProgressPage()),
+                    );
+                    return;
+                  }
                   Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const ProgressPage()),
+                    MaterialPageRoute(builder: (_) => const ProfilePage()),
                   );
-                  return;
-                }
-                Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => const ProfilePage()));
-              },
-            ),
-          ],
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -236,7 +239,7 @@ class _SearchField extends StatelessWidget {
           ),
           if (controller.text.isNotEmpty)
             IconButton(
-              icon: const Icon(
+              icon: Icon(
                 Icons.close_rounded,
                 size: 18,
                 color: AppColors.onSurfaceVariant,
@@ -280,7 +283,7 @@ class _TrackListSkeleton extends StatelessWidget {
                         Container(
                           width: 40.r,
                           height: 40.r,
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             color: AppColors.surfaceContainerHigh,
                             shape: BoxShape.circle,
                           ),
@@ -300,7 +303,7 @@ class _TrackListSkeleton extends StatelessWidget {
                         Container(
                           width: 56.r,
                           height: 56.r,
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             color: AppColors.surfaceContainerHigh,
                             shape: BoxShape.circle,
                           ),
@@ -415,7 +418,7 @@ class _FirestoreTrackCard extends StatelessWidget {
                           value: score / 100,
                           strokeWidth: 4,
                           backgroundColor: AppColors.surfaceContainerHigh,
-                          valueColor: const AlwaysStoppedAnimation(
+                          valueColor: AlwaysStoppedAnimation(
                             AppColors.primaryFixedDim,
                           ),
                         ),

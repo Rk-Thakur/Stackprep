@@ -16,6 +16,7 @@ import '../bloc/practice_session_state.dart';
 import '../widgets/answer_option.dart';
 import '../widgets/inline_code.dart';
 import 'session_summary_page.dart';
+import '../../../../core/theme/app_theme_scope.dart';
 
 /// A single practice question flow, reached via "Start Practice" from a
 /// topic detail page, a module's "Take Quiz", or the daily challenge.
@@ -38,16 +39,18 @@ class PracticeSessionPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => sl<PracticeSessionBloc>()
-        ..add(
-          PracticeSessionStarted(
-            topicCode: topicCode,
-            moduleId: moduleId,
-            challenge: challenge,
+    return Themed(
+      child: BlocProvider(
+        create: (_) => sl<PracticeSessionBloc>()
+          ..add(
+            PracticeSessionStarted(
+              topicCode: topicCode,
+              moduleId: moduleId,
+              challenge: challenge,
+            ),
           ),
-        ),
-      child: const _PracticeSessionView(),
+        child: const _PracticeSessionView(),
+      ),
     );
   }
 }
@@ -61,9 +64,8 @@ class _PracticeSessionView extends StatefulWidget {
 
 class _PracticeSessionViewState extends State<_PracticeSessionView> {
   void _comingSoon(String feature) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('$feature coming soon.')));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('$feature coming soon.')));
   }
 
   void _onPrimaryAction(PracticeSessionState state) {
@@ -102,9 +104,8 @@ class _PracticeSessionViewState extends State<_PracticeSessionView> {
         }
         if (state.status == PracticeSessionStatus.failure &&
             state.errorMessage != null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(state.errorMessage!)),
-          );
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(state.errorMessage!)));
         }
       },
       builder: (context, state) {
@@ -117,7 +118,7 @@ class _PracticeSessionViewState extends State<_PracticeSessionView> {
                   value: state.progress,
                   minHeight: 4.r,
                   backgroundColor: AppColors.surfaceContainerHigh,
-                  valueColor: const AlwaysStoppedAnimation(AppColors.primary),
+                  valueColor: AlwaysStoppedAnimation(AppColors.primary),
                 ),
                 AppTopBar(
                   trailing: Row(
@@ -131,9 +132,7 @@ class _PracticeSessionViewState extends State<_PracticeSessionView> {
                         decoration: BoxDecoration(
                           color: AppColors.surfaceContainer,
                           borderRadius: AppRadius.radiusFull,
-                          border: Border.all(
-                            color: AppColors.outlineVariant,
-                          ),
+                          border: Border.all(color: AppColors.outlineVariant),
                         ),
                         child: FittedBox(
                           fit: BoxFit.scaleDown,
@@ -189,75 +188,72 @@ class _PracticeSessionViewState extends State<_PracticeSessionView> {
                       ),
                     ),
                     _ => SingleChildScrollView(
-                        padding: EdgeInsets.fromLTRB(
-                          AppSpacing.margin,
-                          AppSpacing.sm,
-                          AppSpacing.margin,
-                          AppSpacing.lg,
-                        ),
-                        child: Column(
-                          key: ValueKey(state.currentIndex),
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (question != null) ...[
-                              Text(
-                                '[LOG_ID: ${question.refId}]',
-                                style: AppTypography.labelMono.copyWith(
-                                  color: AppColors.outline,
-                                  fontSize: 11.sp,
-                                ),
-                              ),
-                              SizedBox(height: AppSpacing.sm),
-                              Text.rich(
-                                TextSpan(
-                                  children: parseInlineCode(
-                                    question.question,
-                                    AppTypography.headlineMd.copyWith(
-                                      color: AppColors.onSurface,
-                                      fontSize: 22.sp,
-                                      height: 1.3,
-                                    ),
-                                    AppTypography.codeSm.copyWith(
-                                      color: AppColors.primary,
-                                      fontSize: 15.sp,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              if (question.codeSnippet != null) ...[
-                                SizedBox(height: AppSpacing.md),
-                                CodeBlock(
-                                  header: question.codeSnippet!.header,
-                                  language: question.codeSnippet!.language,
-                                  lines: question.codeSnippet!.lines,
-                                ),
-                              ],
-                              SizedBox(height: AppSpacing.md),
-                              for (var i = 0;
-                                  i < question.options.length;
-                                  i++)
-                                Padding(
-                                  padding: EdgeInsets.only(
-                                    bottom:
-                                        i == question.options.length - 1
-                                            ? 0
-                                            : AppSpacing.sm,
-                                  ),
-                                  child: AnswerOption(
-                                    letter: String.fromCharCode(65 + i),
-                                    text: question.options[i],
-                                    selected: state.selectedIndex == i,
-                                    checked: state.checked,
-                                    isCorrect: i == question.correctIndex,
-                                    onTap: () => context
-                                        .read<PracticeSessionBloc>()
-                                        .add(PracticeAnswerSelected(i)),
-                                  ),
-                                ),
-                            ],
-                          ],
-                        ),
+                      padding: EdgeInsets.fromLTRB(
+                        AppSpacing.margin,
+                        AppSpacing.sm,
+                        AppSpacing.margin,
+                        AppSpacing.lg,
                       ),
+                      child: Column(
+                        key: ValueKey(state.currentIndex),
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (question != null) ...[
+                            Text(
+                              '[LOG_ID: ${question.refId}]',
+                              style: AppTypography.labelMono.copyWith(
+                                color: AppColors.outline,
+                                fontSize: 11.sp,
+                              ),
+                            ),
+                            SizedBox(height: AppSpacing.sm),
+                            Text.rich(
+                              TextSpan(
+                                children: parseInlineCode(
+                                  question.question,
+                                  AppTypography.headlineMd.copyWith(
+                                    color: AppColors.onSurface,
+                                    fontSize: 22.sp,
+                                    height: 1.3,
+                                  ),
+                                  AppTypography.codeSm.copyWith(
+                                    color: AppColors.primary,
+                                    fontSize: 15.sp,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            if (question.codeSnippet != null) ...[
+                              SizedBox(height: AppSpacing.md),
+                              CodeBlock(
+                                header: question.codeSnippet!.header,
+                                language: question.codeSnippet!.language,
+                                lines: question.codeSnippet!.lines,
+                              ),
+                            ],
+                            SizedBox(height: AppSpacing.md),
+                            for (var i = 0; i < question.options.length; i++)
+                              Padding(
+                                padding: EdgeInsets.only(
+                                  bottom: i == question.options.length - 1
+                                      ? 0
+                                      : AppSpacing.sm,
+                                ),
+                                child: AnswerOption(
+                                  letter: String.fromCharCode(65 + i),
+                                  text: question.options[i],
+                                  selected: state.selectedIndex == i,
+                                  checked: state.checked,
+                                  isCorrect: i == question.correctIndex,
+                                  onTap: () => context
+                                      .read<PracticeSessionBloc>()
+                                      .add(PracticeAnswerSelected(i)),
+                                ),
+                              ),
+                          ],
+                        ],
+                      ),
+                    ),
                   },
                 ),
                 Container(height: 1, color: AppColors.outlineVariant),
@@ -272,12 +268,12 @@ class _PracticeSessionViewState extends State<_PracticeSessionView> {
                     children: [
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: state.checked ? null : () => _onSkip(state),
+                          onPressed: state.checked
+                              ? null
+                              : () => _onSkip(state),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppColors.onSurface,
-                            side: const BorderSide(
-                              color: AppColors.outlineVariant,
-                            ),
+                            side: BorderSide(color: AppColors.outlineVariant),
                             padding: EdgeInsets.symmetric(vertical: 14.r),
                             shape: RoundedRectangleBorder(
                               borderRadius: AppRadius.radiusMd,
@@ -290,7 +286,8 @@ class _PracticeSessionViewState extends State<_PracticeSessionView> {
                       Expanded(
                         flex: 2,
                         child: ElevatedButton(
-                          onPressed: state.selectedIndex == null && !state.checked
+                          onPressed:
+                              state.selectedIndex == null && !state.checked
                               ? null
                               : () => _onPrimaryAction(state),
                           style: ElevatedButton.styleFrom(

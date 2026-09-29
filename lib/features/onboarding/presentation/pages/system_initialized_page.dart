@@ -13,6 +13,7 @@ import '../../domain/entities/onboarding_summary.dart';
 import '../../domain/entities/runtime_level.dart';
 import '../../domain/entities/stack_track.dart';
 import '../cubit/onboarding_cubit.dart';
+import '../../../../core/theme/app_theme_scope.dart';
 
 /// Title-cased display name for a [RuntimeLevel.id], for prose contexts
 /// where [RuntimeLevel.title]'s all-caps styling (used on the level-select
@@ -34,88 +35,90 @@ class SystemInitializedPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final summary = onboardingSummary;
 
-    return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.symmetric(
-                  horizontal: AppSpacing.margin,
-                  vertical: AppSpacing.lg,
-                ),
-                child: Column(
-                  children: [
-                    SizedBox(height: AppSpacing.xl),
-                    const _CheckmarkBadge(),
-                    SizedBox(height: AppSpacing.xl),
-                    Text(
-                      'System Initialized',
-                      textAlign: TextAlign.center,
-                      style: AppTypography.headlineLg.copyWith(
-                        color: AppColors.primary,
-                      ),
-                    ),
-                    SizedBox(height: AppSpacing.sm),
-                    Text(
-                      'Your personalized curriculum is ready for execution.',
-                      textAlign: TextAlign.center,
-                      style: AppTypography.bodyLg.copyWith(
-                        color: AppColors.onSurfaceVariant,
-                      ),
-                    ),
-                    SizedBox(height: AppSpacing.xl),
-                    _ConfigurationSummaryCard(
-                      tracks: summary.selectedTracks,
-                      level: summary.runtimeLevel,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                AppSpacing.margin,
-                AppSpacing.sm,
-                AppSpacing.margin,
-                AppSpacing.md,
-              ),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    // Fire-and-forget: the sync shouldn't delay entering the
-                    // workspace, and OnboardingCubit lives above this route
-                    // so it isn't torn down by the navigation below.
-                    unawaited(
-                      context.read<OnboardingCubit>().syncOnEnterWorkspace(),
-                    );
-                    Navigator.of(context).pushAndRemoveUntil(
-                      MaterialPageRoute(builder: (_) => const HomePage()),
-                      (route) => false,
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    padding: EdgeInsets.symmetric(vertical: 16.r),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: AppRadius.radiusMd,
-                    ),
-                    textStyle: AppTypography.bodyLg.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+    return Themed(
+      child: Scaffold(
+        body: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: AppSpacing.margin,
+                    vertical: AppSpacing.lg,
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  child: Column(
                     children: [
-                      const Text('Enter Workspace'),
-                      SizedBox(width: AppSpacing.sm),
-                      Icon(Icons.arrow_forward_rounded, size: 20.r),
+                      SizedBox(height: AppSpacing.xl),
+                      const _CheckmarkBadge(),
+                      SizedBox(height: AppSpacing.xl),
+                      Text(
+                        'System Initialized',
+                        textAlign: TextAlign.center,
+                        style: AppTypography.headlineLg.copyWith(
+                          color: AppColors.primary,
+                        ),
+                      ),
+                      SizedBox(height: AppSpacing.sm),
+                      Text(
+                        'Your personalized curriculum is ready for execution.',
+                        textAlign: TextAlign.center,
+                        style: AppTypography.bodyLg.copyWith(
+                          color: AppColors.onSurfaceVariant,
+                        ),
+                      ),
+                      SizedBox(height: AppSpacing.xl),
+                      _ConfigurationSummaryCard(
+                        tracks: summary.selectedTracks,
+                        level: summary.runtimeLevel,
+                      ),
                     ],
                   ),
                 ),
               ),
-            ),
-          ],
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  AppSpacing.margin,
+                  AppSpacing.sm,
+                  AppSpacing.margin,
+                  AppSpacing.md,
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      // Fire-and-forget: the sync shouldn't delay entering the
+                      // workspace, and OnboardingCubit lives above this route
+                      // so it isn't torn down by the navigation below.
+                      unawaited(
+                        context.read<OnboardingCubit>().syncOnEnterWorkspace(),
+                      );
+                      Navigator.of(context).pushAndRemoveUntil(
+                        MaterialPageRoute(builder: (_) => const HomePage()),
+                        (route) => false,
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(vertical: 16.r),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: AppRadius.radiusMd,
+                      ),
+                      textStyle: AppTypography.bodyLg.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text('Enter Workspace'),
+                        SizedBox(width: AppSpacing.sm),
+                        Icon(Icons.arrow_forward_rounded, size: 20.r),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -139,7 +142,7 @@ class _CheckmarkBadge extends StatelessWidget {
         width: 72.r,
         height: 72.r,
         alignment: Alignment.center,
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppColors.primary,
           shape: BoxShape.circle,
         ),

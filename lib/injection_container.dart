@@ -3,10 +3,16 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get_it/get_it.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'features/export/data/progress_pdf_generator.dart';
+import 'features/export/data/progress_report_exporter.dart';
+import 'features/export/domain/usecases/build_progress_report.dart';
 import 'core/storage/daily_challenge_store.dart';
+import 'core/storage/theme_store.dart';
+import 'core/theme/theme_cubit.dart';
 import 'features/auth/data/datasources/auth_remote_data_source.dart';
 import 'features/auth/data/repositories/auth_repository_impl.dart';
 import 'features/auth/domain/repositories/auth_repository.dart';
+import 'features/auth/domain/usecases/delete_account.dart';
 import 'features/auth/domain/usecases/observe_auth_state.dart';
 import 'features/auth/domain/usecases/sign_in_with_email.dart';
 import 'features/auth/domain/usecases/sign_in_with_google.dart';
@@ -66,6 +72,7 @@ Future<void> configureDependencies() async {
     () => ProgressFirestoreDataSource(firestore: sl(), firebaseAuth: sl()),
   );
   sl.registerLazySingleton(() => DailyChallengeStore(prefs: sl()));
+  sl.registerLazySingleton(() => ThemeStore(prefs: sl()));
 
   // Repositories
   sl.registerLazySingleton<AuthRepository>(
@@ -91,6 +98,13 @@ Future<void> configureDependencies() async {
   sl.registerLazySingleton(() => SignUpWithEmail(sl()));
   sl.registerLazySingleton(() => SignInWithGoogle(sl()));
   sl.registerLazySingleton(() => SignOut(sl()));
+  sl.registerLazySingleton(
+    () => DeleteAccount(
+      authRepository: sl(),
+      onboardingRepository: sl(),
+      dailyChallengeStore: sl(),
+    ),
+  );
 
   // Use cases — onboarding
   sl.registerLazySingleton(() => GetStackTracks(sl()));
@@ -101,6 +115,13 @@ Future<void> configureDependencies() async {
   // Use cases — practice / progress
   sl.registerLazySingleton(() => GetPracticeQuestions(sl()));
   sl.registerLazySingleton(() => GetProgressOverview(repository: sl()));
+  sl.registerLazySingleton(
+    () => BuildProgressReport(getProgressOverview: sl(), getStackTracks: sl()),
+  );
+  sl.registerLazySingleton(() => const ProgressPdfGenerator());
+  sl.registerLazySingleton(
+    () => ProgressReportExporter(buildReport: sl(), generator: sl()),
+  );
   sl.registerLazySingleton(() => RecordAttempt(repository: sl()));
   sl.registerLazySingleton(() => MarkModuleViewed(repository: sl()));
 
@@ -124,6 +145,7 @@ Future<void> configureDependencies() async {
     ),
   );
   sl.registerFactory(() => TopicCubit(repository: sl()));
+  sl.registerFactory(() => ThemeCubit(store: sl()));
   sl.registerFactory(
     () => ProgressCubit(
       getProgressOverview: sl(),

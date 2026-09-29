@@ -63,7 +63,9 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<Either<Failure, AppUser?>> signInWithGoogle() async {
     try {
       final user = await _remoteDataSource.signInWithGoogle();
-      return Right(user == null ? null : UserModel.fromFirebase(user).toEntity());
+      return Right(
+        user == null ? null : UserModel.fromFirebase(user).toEntity(),
+      );
     } on ServerException catch (e) {
       return Left(ServerFailure(e.message));
     } catch (_) {
@@ -80,6 +82,20 @@ class AuthRepositoryImpl implements AuthRepository {
       return Left(ServerFailure(e.message));
     } catch (_) {
       return const Left(ServerFailure('Could not sign out.'));
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> deleteAccount() async {
+    try {
+      await _remoteDataSource.deleteAccount();
+      return const Right(null);
+    } on ServerException catch (e) {
+      return Left(ServerFailure(e.message));
+    } catch (_) {
+      return const Left(
+        ServerFailure('Could not delete your account. Please try again.'),
+      );
     }
   }
 

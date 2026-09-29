@@ -44,6 +44,9 @@ class _FakeAuthRepository implements AuthRepository {
 
   @override
   Future<Either<Failure, void>> signOut() async => const Right(null);
+
+  @override
+  Future<Either<Failure, void>> deleteAccount() async => const Right(null);
 }
 
 void main() {

@@ -34,6 +34,12 @@ abstract interface class OnboardingLocalDataSource {
     required List<String> trackIds,
     required String runtimeLevelId,
   });
+
+  /// Wipes the per-account onboarding state: the selected tracks, the runtime
+  /// level, and the completion flag that the splash screen routes on. Without
+  /// this the next person to sign in on this device would inherit this
+  /// account's tracks and skip onboarding entirely.
+  Future<void> clearAccountData();
 }
 
 class OnboardingLocalDataSourceImpl implements OnboardingLocalDataSource {
@@ -81,7 +87,8 @@ class OnboardingLocalDataSourceImpl implements OnboardingLocalDataSource {
     RuntimeLevel(
       id: 'junior',
       title: 'JUNIOR',
-      description: 'Focus on syntax, basic components, and lifecycle management.',
+      description:
+          'Focus on syntax, basic components, and lifecycle management.',
       focus: 'Syntax & Lifecycle Fundamentals',
     ),
     RuntimeLevel(
@@ -111,7 +118,8 @@ class OnboardingLocalDataSourceImpl implements OnboardingLocalDataSource {
   OnboardingSummary? savedSummary;
 
   @override
-  bool isOnboardingCompleted() => _prefs.getBool(_kOnboardingCompletedKey) ?? false;
+  bool isOnboardingCompleted() =>
+      _prefs.getBool(_kOnboardingCompletedKey) ?? false;
 
   @override
   Future<void> setOnboardingCompleted() =>
@@ -132,5 +140,13 @@ class OnboardingLocalDataSourceImpl implements OnboardingLocalDataSource {
   }) async {
     await _prefs.setStringList(_kSelectedTrackIdsKey, trackIds);
     await _prefs.setString(_kSelectedRuntimeLevelKey, runtimeLevelId);
+  }
+
+  @override
+  Future<void> clearAccountData() async {
+    savedSummary = null;
+    await _prefs.remove(_kOnboardingCompletedKey);
+    await _prefs.remove(_kSelectedTrackIdsKey);
+    await _prefs.remove(_kSelectedRuntimeLevelKey);
   }
 }

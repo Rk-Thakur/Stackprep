@@ -28,4 +28,8 @@ abstract interface class OnboardingRepository {
     required List<String> trackIds,
     required String runtimeLevelId,
   });
+
+  /// Erases this device's copy of the account's onboarding state, including
+  /// the selected tracks. Part of account deletion.
+  Future<Either<Failure, void>> clearAccountData();
 }

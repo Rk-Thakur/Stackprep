@@ -42,11 +42,13 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
       }
       final level = _localDataSource.runtimeLevels.firstWhere(
         (candidate) => candidate.id == runtimeLevelId,
-        orElse: () => throw CacheException(
-          'Unknown runtime level "$runtimeLevelId".',
-        ),
+        orElse: () =>
+            throw CacheException('Unknown runtime level "$runtimeLevelId".'),
       );
-      final summary = OnboardingSummary(selectedTracks: tracks, runtimeLevel: level);
+      final summary = OnboardingSummary(
+        selectedTracks: tracks,
+        runtimeLevel: level,
+      );
       _localDataSource.savedSummary = summary;
       return Right(summary);
     } on CacheException catch (e) {
@@ -67,6 +69,20 @@ class OnboardingRepositoryImpl implements OnboardingRepository {
       return const Right(null);
     } on AppException catch (e) {
       return Left(ServerFailure(e.message));
+    }
+  }
+
+  @override
+  Future<Either<Failure, void>> clearAccountData() async {
+    try {
+      await _localDataSource.clearAccountData();
+      return const Right(null);
+    } on AppException catch (e) {
+      return Left(CacheFailure(e.message));
+    } catch (_) {
+      return const Left(
+        CacheFailure('Could not clear the data stored on this device.'),
+      );
     }
   }
 }
